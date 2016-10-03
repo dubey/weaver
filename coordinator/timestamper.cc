@@ -43,14 +43,14 @@ static coordinator::timestamper *vts;
 static uint64_t vt_id;
 
 // tx functions
-void prepare_tx(std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub *hstub, order::oracle *time_oracle);
+void prepare_tx(uint64_t thread_id, std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub *hstub, order::oracle *time_oracle);
 void end_tx(uint64_t tx_id, coordinator::hyper_stub *hstub, uint64_t shard_id);
 
 
 // assign locations to all node create ops
 // then pass the tx to hstub object
 void
-prepare_tx(std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub *hstub, order::oracle *time_oracle)
+prepare_tx(uint64_t thread_id, std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub *hstub, order::oracle *time_oracle)
 {
     for (std::shared_ptr<transaction::pending_update> upd: tx->writes) {
         switch (upd->type) {
@@ -68,7 +68,7 @@ prepare_tx(std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub 
 #undef CHECK_LOC
 #undef HANDLE_OR_ALIAS
 
-    tx->id = vts->generate_req_id();
+    tx->id = vts->generate_req_id(thread_id);
     uint64_t sender = tx->sender;
     bool error = false;
     bool ready = false;
@@ -172,7 +172,7 @@ nop_function()
             tx = std::make_shared<transaction::pending_tx>(transaction::NOP);
             tx->nop = std::make_shared<transaction::nop_data>();
 
-            tx->id = vts->generate_req_id();
+            tx->id = vts->generate_req_id(NUM_VT_THREADS);
             vts->clk_rw_mtx.wrlock();
             vts->vclk.increment_clock();
             vts->out_queue_counter++;
@@ -183,14 +183,15 @@ nop_function()
 
             vts->tx_prog_mtx.lock();
             tx->nop->max_done_clk = vts->m_max_done_clk;
+            uint64_t num_outstanding_progs = vts->m_num_outstanding_progs.load();
             if (kronos_call) {
-                if (vts->outstanding_progs.empty()) {
+                if (num_outstanding_progs == 0) {
                     kronos_cleanup_clk = tx->timestamp.clock;
                 } else if (kronos_cleanup_clk[vt_id+1] < vts->m_max_done_clk[vt_id+1]) {
                     kronos_cleanup_clk = vts->m_max_done_clk;
                 }
             }
-            tx->nop->outstanding_progs = vts->pend_progs.size();
+            tx->nop->outstanding_progs = num_outstanding_progs;
             tx->nop->shard_node_count = vts->shard_node_count;
 
             for (auto &p: vts->done_txs) {
@@ -318,7 +319,8 @@ clk_update_function(void*)
 
 // unpack client message for a node program, prepare shard msges, and send out
 void
-unpack_and_forward_node_prog(std::unique_ptr<message::message> msg,
+unpack_and_forward_node_prog(uint64_t thread_id,
+                             std::unique_ptr<message::message> msg,
                              uint64_t clientID,
                              coordinator::hyper_stub *hstub)
 {
@@ -434,20 +436,24 @@ unpack_and_forward_node_prog(std::unique_ptr<message::message> msg,
         initial_batches[loc_map[p.first]].emplace_back(p);
     }
 
+    po6::threads::mutex &prog_mtx = vts->m_prog_thread_mtxs[thread_id];
+    std::atomic<uint64_t> &num_outstanding_progs = vts->m_num_outstanding_progs;
+    std::vector<current_prog*> &pend_progs = vts->m_pend_progs[thread_id];
+
     vts->clk_rw_mtx.wrlock();
     vts->vclk.increment_clock();
     vc::vclock req_timestamp = vts->vclk;
     assert(req_timestamp.clock.size() == ClkSz);
 
-    vts->tx_prog_mtx.lock();
+    prog_mtx.lock();
     vts->clk_rw_mtx.unlock();
 
-    uint64_t req_id = vts->generate_req_id();
+    uint64_t req_id = vts->generate_req_id(thread_id);
     current_prog *cp = new current_prog(req_id, clientID, req_timestamp);
     uint64_t cp_int = (uint64_t)cp;
-    vts->pend_progs.emplace_back(cp);
-    vts->outstanding_progs.emplace(req_id);
-    vts->tx_prog_mtx.unlock();
+    pend_progs.emplace_back(cp);
+    num_outstanding_progs.fetch_add(1);
+    prog_mtx.unlock();
 
 #ifdef weaver_gatekeeper_benchmark_
     {
@@ -487,32 +493,28 @@ unpack_and_forward_node_prog(std::unique_ptr<message::message> msg,
 // update 'max_done_clk' accordingly
 // return true if successfully process prog_done, false if already processed this prog
 bool
-node_prog_done(uint64_t req_id, current_prog *cp)
+node_prog_done(uint64_t thread_id, current_prog *cp)
 {
-    vts->tx_prog_mtx.lock();
+#define NDONE_PROGS_BATCH 100
+    po6::threads::mutex &prog_mtx = vts->m_prog_thread_mtxs[thread_id];
+    std::atomic<uint64_t> &num_outstanding_progs = vts->m_num_outstanding_progs;
+    std::atomic<uint64_t> &num_done_progs = vts->m_num_done_progs;
+    std::vector<current_prog*> &done_progs = vts->m_done_progs[thread_id];
 
-    auto &done_progs = vts->done_progs;
-    auto &outstanding_progs = vts->outstanding_progs;
+    prog_mtx.lock();
 
-    if (outstanding_progs.find(req_id) == outstanding_progs.end()) {
-        return false;
-    }
-
-    outstanding_progs.erase(req_id);
+    num_outstanding_progs.fetch_sub(1);
     done_progs.emplace_back(cp);
-
-    //if (++vts->prog_done_cnt % 100 == 0) {
-    if (++vts->prog_done_cnt % 1 == 0) {
-        vts->prog_done_cnt = 0;
+    if (num_done_progs.fetch_add(1) == NDONE_PROGS_BATCH) {
+        num_done_progs.fetch_sub(NDONE_PROGS_BATCH);
+        prog_mtx.unlock();
+        vts->process_pend_progs();
     } else {
-        return true;
+        prog_mtx.unlock();
     }
-
-    vts->process_pend_progs();
-
-    vts->tx_prog_mtx.unlock();
 
     return true;
+#undef NDONE_PROGS_BATCH
 }
 
 bool
@@ -657,7 +659,7 @@ server_loop(void *args)
                     tx = std::make_shared<transaction::pending_tx>(transaction::UPDATE);
                     msg->unpack_message(message::CLIENT_TX_INIT, nullptr, tx->id, tx->writes);
                     tx->sender = client_sender;
-                    prepare_tx(tx, hstub, time_oracle);
+                    prepare_tx(thread_id_long, tx, hstub, time_oracle);
                     break;
                 }
 
@@ -755,7 +757,7 @@ server_loop(void *args)
                 }
 
                 case message::CLIENT_NODE_PROG_REQ:
-                    unpack_and_forward_node_prog(std::move(msg), client_sender, hstub);
+                    unpack_and_forward_node_prog(thread_id_long, std::move(msg), client_sender, hstub);
                     break;
 
                 // node program response from a shard
@@ -765,7 +767,7 @@ server_loop(void *args)
                     current_prog *cp = (current_prog*)cp_int;
                     client = cp->client;
 
-                    bool to_process = node_prog_done(req_id, cp);
+                    bool to_process = node_prog_done(thread_id_long, cp);
 
                     if (to_process) {
                         vts->comm.send_to_client(client, msg->buf);
@@ -830,7 +832,7 @@ server_loop(void *args)
 
                     vts->tx_queue_loop();
                     for (blocked_prog &bp: *progs) {
-                        unpack_and_forward_node_prog(std::move(bp.msg), bp.client, hstub);
+                        unpack_and_forward_node_prog(thread_id_long, std::move(bp.msg), bp.client, hstub);
                     }
                     break;
                 }

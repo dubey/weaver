@@ -14,6 +14,6 @@
 #ifndef weaver_coordinator_vt_constants_h_
 #define weaver_coordinator_vt_constants_h_
 
-#define NUM_VT_THREADS 8
+#define NUM_VT_THREADS ((uint64_t)sysconf(_SC_NPROCESSORS_ONLN ))
 
 #endif

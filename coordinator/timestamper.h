@@ -19,6 +19,7 @@
 
 #include <vector>
 #include <unordered_map>
+#include <atomic>
 #include <po6/threads/mutex.h>
 #include <po6/threads/rwlock.h>
 #include <po6/threads/cond.h>
@@ -81,8 +82,10 @@ namespace coordinator
         private:
             uint64_t vt_id; // this vector timestamper's id
             uint64_t shifted_id;
-            uint64_t reqid_gen, loc_gen;
-            po6::threads::mutex reqid_gen_mtx, loc_gen_mtx;
+            uint64_t m_reqid_gen, loc_gen;
+            po6::threads::mutex m_reqid_gen_mtx, loc_gen_mtx;
+            // one for each worker thread + nop thread
+            std::vector<std::deque<uint64_t>> m_buffered_reqids;
 
         public:
             // consistency
@@ -102,11 +105,19 @@ namespace coordinator
             std::unordered_map<std::string, coordinator::register_node_prog_state> m_register_prog_status;
 
             // prog cleanup and permanent deletion
-            std::unordered_set<uint64_t> outstanding_progs; // for multiple returns and ft
-            std::vector<current_prog*> pend_progs, done_progs;
-            std::unordered_map<uint64_t, std::pair<uint64_t, uint64_t>> node_recovery_counts;
-            int prog_done_cnt;
+            // global
+            po6::threads::mutex m_prog_global_mtx;
+            std::atomic<uint64_t> m_num_outstanding_progs;
+            std::atomic<uint64_t> m_num_done_progs;
             vc::vclock_t m_max_done_clk; // permanent deletion
+            std::vector<current_prog*> m_pend_progs_all;
+            std::vector<current_prog*> m_done_progs_all;
+            // per thread
+            std::vector<po6::threads::mutex> m_prog_thread_mtxs;
+            std::vector<std::vector<current_prog*>> m_pend_progs;
+            std::vector<std::vector<current_prog*>> m_done_progs;
+
+            std::unordered_map<uint64_t, std::pair<uint64_t, uint64_t>> node_recovery_counts;
 
             // mutexes
         public:
@@ -144,7 +155,7 @@ namespace coordinator
             void restore_backup();
             void reconfigure();
             void update_members_new_config();
-            uint64_t generate_req_id();
+            uint64_t generate_req_id(uint64_t thread_id);
             uint64_t generate_loc();
             void enqueue_tx(std::shared_ptr<transaction::pending_tx> tx);
             bool process_tx_queue(std::shared_ptr<transaction::pending_tx> &tx_ptr, std::vector<std::shared_ptr<transaction::pending_tx>> &factored_tx);
@@ -175,16 +186,21 @@ namespace coordinator
         , serv_id(serverid)
         , vt_id(UINT64_MAX)
         , shifted_id(UINT64_MAX)
-        , reqid_gen(0)
+        , m_reqid_gen(0)
         , loc_gen(0)
+        , m_buffered_reqids(NUM_VT_THREADS+1)
         , vclk(UINT64_MAX, 0)
         , qts(NumShards, 0)
         , clock_update_acks(NumVts-1)
         , clk_updates(0)
         , to_nop(NumShards, true)
         , nop_ack_qts(NumShards, 0)
-        , prog_done_cnt(0)
+        , m_num_outstanding_progs(0)
+        , m_num_done_progs(0)
         , m_max_done_clk(vc::vclock_t(ClkSz, 0))
+        , m_prog_thread_mtxs(NUM_VT_THREADS)
+        , m_pend_progs(NUM_VT_THREADS)
+        , m_done_progs(NUM_VT_THREADS)
         , load_count(0)
         , max_load_time(0)
         , shard_node_count(NumShards, 0)
@@ -201,7 +217,7 @@ namespace coordinator
         // initialize empty vector of done reqs for each prog type
         std::unordered_map<uint64_t, std::vector<bool>> empty_map;
 
-        for (int i = 0; i < NUM_VT_THREADS; i++) {
+        for (uint64_t i = 0; i < NUM_VT_THREADS; i++) {
             hstub_uninit.push_back(new hyper_stub());
             time_oracles_uninit.push_back(new order::oracle());
         }
@@ -394,13 +410,15 @@ namespace coordinator
 
             process_pend_progs();
 
-            for (current_prog *cp: pend_progs) {
+            // for all pending progs that do not have a corresponding done prog message
+            // tell client to retry
+            for (current_prog *cp: m_pend_progs_all) {
                 bool cont = false;
-                for (uint32_t i = 0; i < done_progs.size(); i++) {
-                    if (cp->vclk->get_clock() == done_progs[i]->vclk->get_clock()) {
+                for (uint32_t i = 0; i < m_done_progs_all.size(); i++) {
+                    if (cp->vclk->get_clock() == m_done_progs_all[i]->vclk->get_clock()) {
                         cont = true;
                         break;
-                    } else if (cp->vclk->get_clock() < done_progs[i]->vclk->get_clock()) {
+                    } else if (cp->vclk->get_clock() < m_done_progs_all[i]->vclk->get_clock()) {
                         break;
                     }
                 }
@@ -414,9 +432,9 @@ namespace coordinator
                 comm.send_to_client(cp->client, msg.buf);
                 delete cp;
             }
-            pend_progs.clear();
-            done_progs.clear();
-            outstanding_progs.clear();
+            m_pend_progs_all.clear();
+            m_done_progs_all.clear();
+            m_num_outstanding_progs.store(0);
 
             if (restore) {
                 std::vector<uint64_t> to_clean;
@@ -449,14 +467,28 @@ namespace coordinator
     }
 
     inline uint64_t
-    timestamper :: generate_req_id()
+    timestamper :: generate_req_id(uint64_t thread_id)
     {
-        uint64_t new_id;
-        reqid_gen_mtx.lock();
-        new_id = (++reqid_gen) & TOP_MASK;
-        reqid_gen_mtx.unlock();
-        new_id |= shifted_id;
-        return new_id;
+        std::deque<uint64_t> &reqids_queue = m_buffered_reqids[thread_id];
+
+        if (reqids_queue.empty()) {
+            // ran out of buffered reqids
+            // generate some more
+            reqids_queue = std::deque<uint64_t>(10000);
+            m_reqid_gen_mtx.lock();
+            uint64_t new_id;
+            for (uint64_t i = 0; i < 10000; i++) {
+                new_id = (++m_reqid_gen) & TOP_MASK;
+                new_id |= shifted_id;
+                reqids_queue[i] = new_id;
+            }
+            m_reqid_gen_mtx.unlock();
+        }
+
+        uint64_t req_id = reqids_queue.front();
+        reqids_queue.pop_front();
+
+        return req_id;
     }
 
     inline uint64_t
@@ -636,6 +668,29 @@ namespace coordinator
     inline void
     timestamper :: process_pend_progs()
     {
+        for (uint64_t i = 0; i < NUM_VT_THREADS; i++) {
+            m_prog_thread_mtxs[i].lock();
+
+            std::vector<current_prog*> &cur_pend_progs = m_pend_progs[i];
+            m_pend_progs_all.reserve(m_pend_progs_all.size() + cur_pend_progs.size());
+            for (uint64_t j = 0; j < cur_pend_progs.size(); j++) {
+                m_pend_progs_all.emplace_back(cur_pend_progs[j]);
+            }
+            cur_pend_progs.clear();
+
+            std::vector<current_prog*> &cur_done_progs = m_done_progs[i];
+            m_done_progs_all.reserve(m_done_progs_all.size() + cur_done_progs.size());
+            for (uint64_t j = 0; j < cur_done_progs.size(); j++) {
+                m_done_progs_all.emplace_back(cur_done_progs[j]);
+            }
+            cur_done_progs.clear();
+
+            m_prog_thread_mtxs[i].unlock();
+        }
+
+        std::vector<current_prog*> &pend_progs = m_pend_progs_all;
+        std::vector<current_prog*> &done_progs = m_done_progs_all;
+
         std::sort(pend_progs.begin(), pend_progs.end(), compare_current_prog);
         std::sort(done_progs.begin(), done_progs.end(), compare_current_prog);
 
