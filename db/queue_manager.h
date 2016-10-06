@@ -52,9 +52,11 @@ namespace db
             queued_request* get_rd_req();
             queued_request* get_wr_req();
             queued_request* get_rw_req();
+            bool update_last_clocks_nonlocking(vc::vclock &new_clk);
             bool check_last_clocks_nonlocking(vc::vclock_t &clk);
             bool check_queues_empty();
             bool check_all_nops(std::vector<uint64_t> &nops_idx);
+            bool check_rd_request_nonlocking(vc::vclock&);
             enum queue_order check_wr_queue_single(uint64_t vt_id, uint64_t qt);
             enum queue_order check_wr_queues_timestamps(uint64_t vt_id, uint64_t qt);
             enum queue_order check_wr_request_nonlocking(vc::vclock &vclk, uint64_t qt);
@@ -62,7 +64,7 @@ namespace db
         public:
             queue_manager();
             void enqueue_read_request(uint64_t vt_id, queued_request*);
-            bool check_rd_request(vc::vclock_t &clk);
+            bool check_rd_request(vc::vclock &clk);
             void enqueue_write_request(uint64_t vt_id, queued_request*);
             enum queue_order check_wr_request(vc::vclock &vclk, uint64_t qt);
             bool check_rd_nop(vc::vclock &vclk, uint64_t qt);

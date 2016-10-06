@@ -44,13 +44,41 @@ queue_manager :: enqueue_read_request(uint64_t vt_id, queued_request *t)
     queue_mutex.unlock();
 }
 
+// either there is only one gatekeeper and this is the next op from that gk
+// or this op's clock is lower than all last executed clocks
+// this will return false if clk is after last clock (but not the next op)
+bool
+queue_manager :: check_rd_request_nonlocking(vc::vclock &clk)
+{
+    bool ok_to_exec = false;
+    // value of last clock from this gatekeeper
+    uint64_t gk_last_clk_value = last_clocks[clk.vt_id][clk.vt_id+1];
+    // epoch of last clock from this gateekeper
+    uint64_t gk_last_clk_epoch = last_clocks[clk.vt_id][0];
+    // value of this read request's clock = clk.get_clock() = clk.clock[clk.vt_id+1]
+    // epoch of this read_request's clock = clk.get_epoch() = clk.clock[0]
+    if (NumVts == 1 &&
+        (gk_last_clk_epoch == 0 || gk_last_clk_epoch == clk.get_epoch()) &&
+        (gk_last_clk_value + 1) == clk.get_clock()) {
+        ok_to_exec = true;
+    } else if (check_last_clocks_nonlocking(clk.clock)) {
+        ok_to_exec = true;
+    }
+
+    if (ok_to_exec) {
+        update_last_clocks_nonlocking(clk);
+        return true;
+    } else {
+        return false;
+    }
+}
+
 // check if the read request received in thread loop can be executed without waiting
 bool
-queue_manager :: check_rd_request(vc::vclock_t &clk)
+queue_manager :: check_rd_request(vc::vclock &clk)
 {
-    //return true;
     queue_mutex.lock();
-    bool check = check_last_clocks_nonlocking(clk);
+    bool check = check_rd_request_nonlocking(clk);
     queue_mutex.unlock();
     return check;
 }
@@ -212,12 +240,25 @@ void
 queue_manager :: record_completed_tx(vc::vclock &tx_clk)
 {
     queue_mutex.lock();
-    vc::vclock_t &last_clk = last_clocks[tx_clk.vt_id];
-    vc::vclock_t &this_clk = tx_clk.clock;
-    if (order::oracle::happens_before_no_kronos(last_clk, this_clk)) {
-        last_clk = this_clk;
-    }
+    update_last_clocks_nonlocking(tx_clk);
     queue_mutex.unlock();
+}
+
+// update last clock of a queue if new clocks happens before last clock
+// this happens either after tx has completed execution
+// or after node program has been dequeued from a queue
+// if update is successful return true
+// if new clocks does not happen before last clock return false
+bool
+queue_manager :: update_last_clocks_nonlocking(vc::vclock &new_clk)
+{
+    vc::vclock_t &last_clk = last_clocks[new_clk.vt_id];
+    if (order::oracle::happens_before_no_kronos(last_clk, new_clk.clock)) {
+        last_clk = new_clk.clock;
+        return true;
+    } else {
+        return false;
+    }
 }
 
 bool
@@ -237,7 +278,7 @@ queue_manager :: get_rd_req()
         // execute read request after all write queues have processed write which happens after this read
         if (!pq.empty()) {
             req = pq.top();
-            if (check_last_clocks_nonlocking(req->vclock.clock)) {
+            if (check_rd_request_nonlocking(req->vclock)) {
                 pq.pop();
                 return req;
             }

@@ -21,25 +21,43 @@
 bool
 init_config_constants(const char *config_file_name)
 {
+    std::string NumVts_str = "num_vts";
     NumVts = UINT64_MAX;
     ClkSz = UINT64_MAX;
     NumShards = UINT64_MAX;
+    std::string MaxCacheEntries_str = "max_cache_entries";
     MaxCacheEntries = UINT16_MAX;
+    std::string HyperdexCoord_str = "hyperdex_coord";
     HyperdexCoordIpaddr = std::string();
     HyperdexCoordPort = UINT16_MAX;
+    std::string HyperdexDaemons_str = "hyperdex_daemons";
+    std::string Kronos_str = "kronos";
     KronosIpaddr = std::string();
     KronosPort = UINT16_MAX;
+    std::string WeaverCoord_str = "weaver_coord";
     ServerManagerIpaddr = std::string();
     ServerManagerPort = UINT16_MAX;
+    std::string NoDynamicPartitioning_str = "no_dynamic_partitioning";
+    NoDynamicPartitioning = true;
+    std::string AuxIndex_str = "aux_index";
     AuxIndex = false;
+    std::string BulkLoadPropertyValueDelimiter_str = "bulk_load_property_value_delimiter";
     BulkLoadPropertyValueDelimiter = (char)0;
+    std::string BulkLoadNodeAliasKey_str = "bulk_load_node_alias_key";
     BulkLoadNodeAliasKey = "";
+    std::string BulkLoadEdgeIndexKey_str = "bulk_load_edge_index_key";
     BulkLoadEdgeIndexKey = "";
+    std::string BulkLoadEdgeHandlePrefix_str = "bulk_load_edge_handle_prefix";
     BulkLoadEdgeHandlePrefix = "e";
+    std::string NodesPerMap_str = "nodes_per_map";
     NodesPerMap = 2;
+    std::string MaxMemory_str = "max_memory";
     MaxMemory = 0.5;
+    std::string RdNopPeriod_str = "rd_nop_period";
     RdNopPeriod     = 100000;
+    std::string WrNopPeriod_str = "wr_nop_period";
     WrNopPeriod     = 100*RdNopPeriod;
+    std::string ClkGossipPeriod_str = "clk_gossip_period";
     ClkGossipPeriod = 10000;
 
     FILE *config_file = nullptr;
@@ -167,87 +185,92 @@ init_config_constants(const char *config_file_name)
 
             case YAML_KEY_TOKEN:
                 PARSE_ASSERT_TYPE(YAML_SCALAR_TOKEN);
-                if (strncmp((const char*)token.data.scalar.value, "num_vts", TOKEN_STRCMP_LEN(7)) == 0) {
+                if (strncmp((const char*)token.data.scalar.value, NumVts_str.c_str(), NumVts_str.length()) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_SCALAR;
                     PARSE_INT(NumVts);
 
-                } else if (strncmp((const char*)token.data.scalar.value, "max_cache_entries", TOKEN_STRCMP_LEN(17)) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, MaxCacheEntries_str.c_str(), MaxCacheEntries_str.length()) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_SCALAR;
                     PARSE_INT(MaxCacheEntries);
 
-                } else if (strncmp((const char*)token.data.scalar.value, "hyperdex_coord", TOKEN_STRCMP_LEN(14)) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, HyperdexCoord_str.c_str(), HyperdexCoord_str.length()) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_IPADDR_PORT_BLOCK(HyperdexCoord);
                     assert(!HyperdexCoord.empty());
                     HyperdexCoordIpaddr = HyperdexCoord[0].first;
                     HyperdexCoordPort = HyperdexCoord[0].second;
 
-                } else if (strncmp((const char*)token.data.scalar.value, "hyperdex_daemons", TOKEN_STRCMP_LEN(16)) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, HyperdexDaemons_str.c_str(), HyperdexDaemons_str.length()) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_IPADDR_PORT_BLOCK(HyperdexDaemons);
 
-                } else if (strncmp((const char*)token.data.scalar.value, "kronos", TOKEN_STRCMP_LEN(6)) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, Kronos_str.c_str(), Kronos_str.length()) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_IPADDR_PORT_BLOCK(KronosLocs);
                     assert(!KronosLocs.empty());
                     KronosIpaddr = KronosLocs[0].first;
                     KronosPort = KronosLocs[0].second;
 
-                } else if (strncmp((const char*)token.data.scalar.value, "weaver_coord", TOKEN_STRCMP_LEN(14)) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, WeaverCoord_str.c_str(), WeaverCoord_str.length()) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_IPADDR_PORT_BLOCK(ServerManagerLocs);
                     assert(!ServerManagerLocs.empty());
                     ServerManagerIpaddr = ServerManagerLocs[0].first;
                     ServerManagerPort = ServerManagerLocs[0].second;
 
-                } else if (strncmp((const char*)token.data.scalar.value, "aux_index", TOKEN_STRCMP_LEN(10)) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, NoDynamicPartitioning_str.c_str(), NoDynamicPartitioning_str.length()) == 0) {
+                    yaml_token_delete(&token);
+                    PARSE_VALUE_SCALAR;
+                    PARSE_BOOL(NoDynamicPartitioning);
+
+                } else if (strncmp((const char*)token.data.scalar.value, AuxIndex_str.c_str(), AuxIndex_str.length()) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_SCALAR;
                     PARSE_BOOL(AuxIndex);
 
-                } else if (strncmp((const char*)token.data.scalar.value, "bulk_load_property_value_delimiter", TOKEN_STRCMP_LEN(34)) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, BulkLoadPropertyValueDelimiter_str.c_str(), BulkLoadPropertyValueDelimiter_str.length()) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_SCALAR;
                     PARSE_CHAR(BulkLoadPropertyValueDelimiter);
 
-                } else if (strncmp((const char*)token.data.scalar.value, "bulk_load_node_alias_key", TOKEN_STRCMP_LEN(24)) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, BulkLoadNodeAliasKey_str.c_str(), BulkLoadNodeAliasKey_str.length()) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_SCALAR;
                     PARSE_STRING(BulkLoadNodeAliasKey);
 
-                } else if (strncmp((const char*)token.data.scalar.value, "bulk_load_edge_index_key", TOKEN_STRCMP_LEN(24)) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, BulkLoadEdgeIndexKey_str.c_str(), BulkLoadEdgeIndexKey_str.length()) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_SCALAR;
                     PARSE_STRING(BulkLoadEdgeIndexKey);
 
-                } else if (strncmp((const char*)token.data.scalar.value, "bulk_load_edge_handle_prefix", TOKEN_STRCMP_LEN(28)) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, BulkLoadEdgeHandlePrefix_str.c_str(), BulkLoadEdgeHandlePrefix_str.length()) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_SCALAR;
                     PARSE_STRING(BulkLoadEdgeHandlePrefix);
 
-                } else if (strncmp((const char*)token.data.scalar.value, "nodes_per_map", TOKEN_STRCMP_LEN(13)) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, NodesPerMap_str.c_str(), NodesPerMap_str.length()) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_SCALAR;
                     PARSE_INT(NodesPerMap);
 
-                } else if (strncmp((const char*)token.data.scalar.value, "max_memory", TOKEN_STRCMP_LEN(10)) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, MaxMemory_str.c_str(), MaxMemory_str.length()) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_SCALAR;
                     PARSE_FLOAT(MaxMemory);
 
-                } else if (strncmp((const char*)token.data.scalar.value, "rd_nop_period", TOKEN_STRCMP_LEN(13)) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, RdNopPeriod_str.c_str(), RdNopPeriod_str.length()) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_SCALAR;
                     PARSE_INT(RdNopPeriod);
 
-                } else if (strncmp((const char*)token.data.scalar.value, "wr_nop_period", TOKEN_STRCMP_LEN(13)) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, WrNopPeriod_str.c_str(), WrNopPeriod_str.length()) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_SCALAR;
                     PARSE_INT(WrNopPeriod);
 
-                } else if (strncmp((const char*)token.data.scalar.value, "clk_gossip_period", TOKEN_STRCMP_LEN(17)) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, ClkGossipPeriod_str.c_str(), ClkGossipPeriod_str.length()) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_SCALAR;
                     PARSE_INT(ClkGossipPeriod);

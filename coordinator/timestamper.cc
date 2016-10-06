@@ -30,6 +30,7 @@
 #include "common/config_constants.h"
 #include "common/bool_vector.h"
 #include "common/prog_write_and_dlopen.h"
+#include "common/node_hash_utils.h"
 #include "node_prog/dynamic_prog_table.h"
 #include "node_prog/node_prog_type.h"
 #include "coordinator/timestamper.h"
@@ -367,70 +368,77 @@ unpack_and_forward_node_prog(uint64_t thread_id,
     
     // map from locations to a list of start_node_params to send to that shard
     std::unordered_map<uint64_t, std::deque<std::pair<node_handle_t, std::shared_ptr<Node_Parameters_Base>>>> initial_batches; 
-
-    // lookup mappings
+    // map from node to location
     std::unordered_map<node_handle_t, uint64_t> loc_map;
-    std::unordered_set<node_handle_t> get_set;
 
-#ifndef weaver_gatekeeper_benchmark_
-    for (const auto &initial_arg : initial_args) {
-        get_set.emplace(initial_arg.first);
-    }
-#endif
+    if (NoDynamicPartitioning) {
+        for (const auto &initial_arg: initial_args) {
+            const node_handle_t &h = initial_arg.first;
+            loc_map[h] = hash_node_location(h, NumShards);
+        }
+    } else {
+        // lookup mappings in HyperDex
+        std::unordered_set<node_handle_t> get_set;
 
-    if (!get_set.empty()) {
-        loc_map = hstub->get_mappings(get_set);
+        for (const auto &initial_arg : initial_args) {
+            get_set.emplace(initial_arg.first);
+        }
 
-        bool success = true;
-        if (loc_map.size() < get_set.size() && AuxIndex) {
-            std::unordered_map<std::string, std::pair<node_handle_t, uint64_t>> alias_map;
-            std::pair<node_handle_t, uint64_t> empty;
-            for (const node_handle_t &h: get_set) {
-                if (loc_map.find(h) == loc_map.end()) {
-                    alias_map.emplace(h, empty);
-                }
-            }
+        if (!get_set.empty()) {
+            loc_map = hstub->get_mappings(get_set);
 
-            assert((alias_map.size() + loc_map.size()) == get_set.size());
-
-            success = hstub->get_idx(alias_map);
-
-            if (success) {
-                for (auto &arg: initial_args) {
-                    auto iter = alias_map.find(arg.first);
-                    if (iter != alias_map.end()) {
-                        arg.first = iter->second.first;
-                        loc_map.emplace(iter->second.first, iter->second.second);
-                    } else {
-                        assert(loc_map.find(arg.first) != loc_map.end());
+            bool success = true;
+            if (loc_map.size() < get_set.size() && AuxIndex) {
+                std::unordered_map<std::string, std::pair<node_handle_t, uint64_t>> alias_map;
+                std::pair<node_handle_t, uint64_t> empty;
+                for (const node_handle_t &h: get_set) {
+                    if (loc_map.find(h) == loc_map.end()) {
+                        alias_map.emplace(h, empty);
                     }
                 }
+
+                assert((alias_map.size() + loc_map.size()) == get_set.size());
+
+                success = hstub->get_idx(alias_map);
+
+                if (success) {
+                    for (auto &arg: initial_args) {
+                        auto iter = alias_map.find(arg.first);
+                        if (iter != alias_map.end()) {
+                            arg.first = iter->second.first;
+                            loc_map.emplace(iter->second.first, iter->second.second);
+                        } else {
+                            assert(loc_map.find(arg.first) != loc_map.end());
+                        }
+                    }
+                }
+            } else if (loc_map.size() < get_set.size()) {
+                success = false;
             }
-        } else if (loc_map.size() < get_set.size()) {
-            success = false;
+
+            if (!success) {
+                // some node handles bad, return immediately
+                WDEBUG << "bad node handles in node prog request: ";
+                for (auto &h: get_set) {
+                    std::cerr << h << " ";
+                }
+                std::cerr << std::endl;
+                msg->prepare_message(message::NODE_PROG_NOTFOUND);
+                vts->comm.send_to_client(clientID, msg->buf);
+                return;
+            }
         }
 
-        if (!success) {
-            // some node handles bad, return immediately
-            WDEBUG << "bad node handles in node prog request: ";
-            for (auto &h: get_set) {
-                std::cerr << h << " ";
-            }
-            std::cerr << std::endl;
-            msg->prepare_message(message::NODE_PROG_NOTFOUND);
-            vts->comm.send_to_client(clientID, msg->buf);
-            return;
-        }
+        // process loc map
+        // hack around bug: should be storing shard id in HyperDex, not server
+        //if (ShardIdIncr > 1) {
+        //    uint64_t increment = ShardIdIncr - 1;
+        //    for (auto &p: loc_map) {
+        //        p.second += increment;
+        //    }
+        //}
+
     }
-
-    // process loc map
-    // hack around bug: should be storing shard id in HyperDex, not server
-    //if (ShardIdIncr > 1) {
-    //    uint64_t increment = ShardIdIncr - 1;
-    //    for (auto &p: loc_map) {
-    //        p.second += increment;
-    //    }
-    //}
 
     for (const auto &p: initial_args) {
         initial_batches[loc_map[p.first]].emplace_back(p);
@@ -455,15 +463,15 @@ unpack_and_forward_node_prog(uint64_t thread_id,
     num_outstanding_progs.fetch_add(1);
     prog_mtx.unlock();
 
-#ifdef weaver_gatekeeper_benchmark_
-    {
-        // benchmarking gatekeeper performance
-        // return to client after "assigning timestamp"
-        msg->prepare_message(message::NODE_PROG_BENCHMARK);
-        vts->comm.send_to_client(clientID, msg->buf);
-        return;
-    }
-#endif
+//#ifdef weaver_gatekeeper_benchmark_
+//    {
+//        // benchmarking gatekeeper performance
+//        // return to client after "assigning timestamp"
+//        msg->prepare_message(message::NODE_PROG_BENCHMARK);
+//        vts->comm.send_to_client(clientID, msg->buf);
+//        return;
+//    }
+//#endif
 
     message::message msg_to_send;
     for (auto &batch_pair: initial_batches) {
@@ -476,7 +484,6 @@ unpack_and_forward_node_prog(uint64_t thread_id,
                                     cp_int,
                                     batch_pair.second);
         vts->comm.send(batch_pair.first, msg_to_send.buf);
-        //WDEBUG << "send node prog=" << req_id << " to shard=" << batch_pair.first << std::endl;
     }
 
 #ifdef weaver_benchmark_
@@ -498,17 +505,20 @@ node_prog_done(uint64_t thread_id, current_prog *cp)
 #define NDONE_PROGS_BATCH 100
     po6::threads::mutex &prog_mtx = vts->m_prog_thread_mtxs[thread_id];
     std::atomic<uint64_t> &num_outstanding_progs = vts->m_num_outstanding_progs;
-    std::atomic<uint64_t> &num_done_progs = vts->m_num_done_progs;
+    uint64_t &num_done_progs = vts->m_num_done_progs[thread_id];
     std::vector<current_prog*> &done_progs = vts->m_done_progs[thread_id];
 
     prog_mtx.lock();
 
     num_outstanding_progs.fetch_sub(1);
     done_progs.emplace_back(cp);
-    if (num_done_progs.fetch_add(1) == NDONE_PROGS_BATCH) {
-        num_done_progs.fetch_sub(NDONE_PROGS_BATCH);
+    if (++num_done_progs == NDONE_PROGS_BATCH) {
+        num_done_progs = 100;
         prog_mtx.unlock();
+
+        vts->tx_prog_mtx.lock();
         vts->process_pend_progs();
+        vts->tx_prog_mtx.unlock();
     } else {
         prog_mtx.unlock();
     }

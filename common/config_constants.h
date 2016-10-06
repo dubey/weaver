@@ -40,6 +40,7 @@ extern std::string ServerManagerIpaddr;
 extern uint16_t ServerManagerPort;
 extern std::vector<std::pair<std::string, uint16_t>> ServerManagerLocs;
 
+extern bool NoDynamicPartitioning;
 extern bool AuxIndex;
 extern char BulkLoadPropertyValueDelimiter;
 extern std::string BulkLoadNodeAliasKey;
@@ -76,6 +77,7 @@ uint64_t get_num_shards();
     std::string ServerManagerIpaddr; \
     uint16_t ServerManagerPort; \
     std::vector<std::pair<std::string, uint16_t>> ServerManagerLocs; \
+    bool NoDynamicPartitioning; \
     bool AuxIndex; \
     char BulkLoadPropertyValueDelimiter; \
     std::string BulkLoadNodeAliasKey; \

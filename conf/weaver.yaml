@@ -28,10 +28,16 @@ kronos:
 weaver_coord:
     - 128.84.167.101 : 2002
 
+# if dynamic partitioning is turned off, then we do not perform HyperDex lookups during node programs
+# no_dynamic_partitioning = true assumes number of shards remains constant after initial cluster setup
+# when this is false, we can have dynamic partitioning.  In that case every request requires HD lookup for current vertex location
+# default: true
+no_dynamic_partitioning: true
+
 # Boolean aux_index controls whether Weaver maintains auxiliary indexing.
 # Auxiliary indexing can be used to access edges and attach arbitrary handles to nodes.
 # Default: false
-aux_index: true
+aux_index: false
 
 # BulkLoadPropertyValueDelimiter is a character used to delimit property lists while bulk loading graphml graphs.
 # Default: '\0'

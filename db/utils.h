@@ -13,6 +13,7 @@
 #define weaver_db_utils_h
 
 #include "common/types.h"
+#include "common/node_hash_utils.h"
 #include "db/shard_constants.h"
 
 inline uint64_t

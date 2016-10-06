@@ -32,6 +32,7 @@
 #include "common/event_order.h"
 #include "common/clock.h"
 #include "common/prog_write_and_dlopen.h"
+#include "common/node_hash_utils.h"
 #include "db/shard.h"
 #include "db/message_wrapper.h"
 #include "db/remote_node.h"
@@ -319,7 +320,7 @@ get_xml_element_chunk(std::ifstream &file,
                 xml_elem.edge = id1;
             }
             xml_elem.node = id0;
-            xml_elem.owner_shard = (hash_node_handle(id0) % num_shards) + ShardIdIncr;
+            xml_elem.owner_shard = hash_node_location(id0, num_shards);
             xml_elem.owner_tid = (int)get_map_idx(id0) % load_nthreads;
         } else {
             assert(file.eof());
@@ -418,8 +419,7 @@ load_xml_node(pugi::xml_document &doc,
 
     // init node attributes
     node_handle_t id0 = node.attribute("id").value();
-    uint64_t hash0 = hash_node_handle(id0);
-    uint64_t loc = (hash0 % num_shards) + ShardIdIncr;
+    uint64_t loc = hash_node_location(id0, num_shards);
     uint64_t map_idx = get_map_idx(id0);
     assert((loc == shard_id) && ((int)map_idx % load_nthreads == owner_tid));
 
@@ -455,14 +455,6 @@ load_xml_node(pugi::xml_document &doc,
         if (blk > static_args.block_index) {
             static_args.block_index = blk;
         }
-    }
-
-    if (++cur_shard_node_count % 10000 == 0) {
-        WDEBUG << "GRAPHML tid=" << this_tid
-               << " node=" << cur_shard_node_count
-               << " nodes_in_mem=" << nodes_in_memory
-               << " other_thread_elem_count=" << static_args.other_thread_elem_count
-               << std::endl;
     }
 
     uint64_t start_edge_idx;
@@ -513,6 +505,14 @@ load_xml_node(pugi::xml_document &doc,
     } else {
         delete n;
     }
+
+    if (++cur_shard_node_count % 10000 == 0) {
+        WDEBUG << "GRAPHML tid=" << this_tid
+               << " node=" << cur_shard_node_count
+               << " nodes_in_mem=" << nodes_in_memory
+               << " other_thread_elem_count=" << static_args.other_thread_elem_count
+               << std::endl;
+    }
 }
 
 void
@@ -536,8 +536,7 @@ check_node(const node_handle_t &node_handle,
 
     // init node attributes
     const node_handle_t &id0 = node_handle;
-    uint64_t hash0 = hash_node_handle(id0);
-    uint64_t loc = (hash0 % num_shards) + ShardIdIncr;
+    uint64_t loc = hash_node_location(id0, num_shards);
     uint64_t map_idx = get_map_idx(id0);
     assert((loc == shard_id) && ((int)map_idx % load_nthreads == owner_tid));
 
@@ -546,14 +545,6 @@ check_node(const node_handle_t &node_handle,
     if (n == nullptr) {
         // node already exists
         return;
-    }
-
-    if (++cur_shard_node_count % 10000 == 0) {
-        WDEBUG << "GRAPHML tid=" << this_tid
-               << " node=" << cur_shard_node_count
-               << " nodes_in_mem=" << nodes_in_memory
-               << " other_thread_elem_count=" << static_args.other_thread_elem_count
-               << std::endl;
     }
 
     uint64_t start_edge_idx;
@@ -582,6 +573,14 @@ check_node(const node_handle_t &node_handle,
     if (in_mem) {
         nodes_in_memory++;
     }
+
+    if (++cur_shard_node_count % 10000 == 0) {
+        WDEBUG << "GRAPHML tid=" << this_tid
+               << " node=" << cur_shard_node_count
+               << " nodes_in_mem=" << nodes_in_memory
+               << " other_thread_elem_count=" << static_args.other_thread_elem_count
+               << std::endl;
+    }
 }
 
 //#undef MAX_EDGES_PER_NODE
@@ -608,14 +607,13 @@ load_xml_edge(pugi::xml_document &doc,
 
     // initialize edge attributes
     node_handle_t id0 = edge.attribute("source").value();
-    uint64_t hash0 = hash_node_handle(id0);
-    uint64_t loc0 = (hash0 % num_shards) + ShardIdIncr;
+    uint64_t loc0 = hash_node_location(id0, num_shards);
     uint64_t map_idx = get_map_idx(id0);
     assert((loc0 == shard_id) && ((int)map_idx % load_nthreads == owner_tid));
 
     node_handle_t id1 = edge.attribute("target").value();
     edge_handle_t edge_handle = edge.attribute("id").value();
-    uint64_t loc1 = (hash_node_handle(id1) % num_shards) + ShardIdIncr;
+    uint64_t loc1 = hash_node_location(id1, num_shards);
 
     check_node(id0,
                owner_tid, this_tid,
@@ -2764,7 +2762,7 @@ server_loop_busybee(uint64_t thread_id)
                 assert(vclk.clock.size() == ClkSz);
 
                 mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
-                if (S->qm.check_rd_request(vclk.clock)) {
+                if (S->qm.check_rd_request(vclk)) {
                     mwrap->time_oracle = time_oracle;
                     unpack_node_program(thread_id, mwrap);
                 } else {

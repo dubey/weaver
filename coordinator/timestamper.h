@@ -108,12 +108,12 @@ namespace coordinator
             // global
             po6::threads::mutex m_prog_global_mtx;
             std::atomic<uint64_t> m_num_outstanding_progs;
-            std::atomic<uint64_t> m_num_done_progs;
             vc::vclock_t m_max_done_clk; // permanent deletion
             std::vector<current_prog*> m_pend_progs_all;
             std::vector<current_prog*> m_done_progs_all;
             // per thread
             std::vector<po6::threads::mutex> m_prog_thread_mtxs;
+            std::vector<uint64_t> m_num_done_progs;
             std::vector<std::vector<current_prog*>> m_pend_progs;
             std::vector<std::vector<current_prog*>> m_done_progs;
 
@@ -196,9 +196,9 @@ namespace coordinator
         , to_nop(NumShards, true)
         , nop_ack_qts(NumShards, 0)
         , m_num_outstanding_progs(0)
-        , m_num_done_progs(0)
         , m_max_done_clk(vc::vclock_t(ClkSz, 0))
         , m_prog_thread_mtxs(NUM_VT_THREADS)
+        , m_num_done_progs(NUM_VT_THREADS, 0)
         , m_pend_progs(NUM_VT_THREADS)
         , m_done_progs(NUM_VT_THREADS)
         , load_count(0)
