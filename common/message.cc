@@ -30,6 +30,8 @@ message :: to_string(const msg_type &t)
             return "CLIENT_NODE_PROG_REQ";
         case CLIENT_NODE_PROG_REPLY:
             return "CLIENT_NODE_PROG_REPLY";
+        case CLIENT_REGISTER_NODE_PROG:
+            return "CLIENT_REGISTER_NODE_PROG";
         case START_MIGR:
             return "START_MIGR";
         case ONE_STREAM_MIGR:

@@ -539,11 +539,11 @@ node_prog_done(uint64_t thread_id, current_prog *cp)
 }
 
 bool
-register_node_prog(std::unique_ptr<message::message> msg, uint64_t client)
+client_register_node_prog(std::unique_ptr<message::message> msg, uint64_t client)
 {
     std::vector<uint8_t> buf;
     std::string prog_handle;
-    msg->unpack_message(message::REGISTER_NODE_PROG, nullptr, prog_handle, buf);
+    msg->unpack_message(message::CLIENT_REGISTER_NODE_PROG, nullptr, prog_handle, buf);
 
     if (prog_handle != weaver_util::sha256_chararr(buf, buf.size())) {
         WDEBUG << "register_node_prog error: "
@@ -559,19 +559,25 @@ register_node_prog(std::unique_ptr<message::message> msg, uint64_t client)
         return false;
     }
 
-    std::unordered_set<uint64_t> shards;
+    std::unordered_set<uint64_t> servers;
+
+    for (uint64_t i = 0; i < NumVts; i++) {
+        if (i != vt_id) {
+            servers.emplace(i);
+        }
+    }
 
     vts->periodic_update_mutex.lock();
     for (const server &srv: vts->periodic_update_config.get_servers()) {
         if (srv.type == server::SHARD && srv.state == server::AVAILABLE) {
-            shards.emplace(srv.virtual_id+NumVts);
+            servers.emplace(srv.virtual_id+NumVts);
         }
     }
     vts->periodic_update_mutex.unlock();
 
     coordinator::register_node_prog_state reg_state;
-    reg_state.client = client;
-    reg_state.shards = shards;
+    reg_state.client  = client;
+    reg_state.servers = servers;
 
     vts->m_dyn_prog_mtx.wrlock();
     if (vts->m_dyn_prog_map.find(prog_handle) != vts->m_dyn_prog_map.end()) {
@@ -587,9 +593,9 @@ register_node_prog(std::unique_ptr<message::message> msg, uint64_t client)
         vts->m_dyn_prog_mtx.unlock();
     }
 
-    WDEBUG << "registering node prog " << prog_handle << " at #" << shards.size() << " shards" << std::endl;
+    WDEBUG << "registering node prog " << prog_handle << " at #" << servers.size() << " servers" << std::endl;
 
-    for (uint64_t s: shards) {
+    for (uint64_t s: servers) {
         message::message m;
         m.prepare_message(message::REGISTER_NODE_PROG,
                           nullptr,
@@ -597,7 +603,50 @@ register_node_prog(std::unique_ptr<message::message> msg, uint64_t client)
                           vt_id,
                           buf);
         vts->comm.send(s, m.buf);
-        WDEBUG << "register node prog at shard " << s << std::endl;
+        WDEBUG << "register node prog at server " << s << std::endl;
+    }
+
+    return true;
+}
+
+bool
+register_node_prog(std::unique_ptr<message::message> msg)
+{
+    std::vector<uint8_t> buf;
+    std::string prog_handle;
+    uint64_t rec_vt_id;
+    msg->unpack_message(message::REGISTER_NODE_PROG, nullptr, prog_handle, rec_vt_id, buf);
+
+    bool success = true;
+
+    if (prog_handle != weaver_util::sha256_chararr(buf, buf.size())) {
+        WDEBUG << "register_node_prog error: "
+               << "sha256 does not match, "
+               << "prog_handle=" << prog_handle
+               << ", sha256=" << weaver_util::sha256_chararr(buf, buf.size())
+               << std::endl;
+        success = false;
+    }
+
+    std::shared_ptr<dynamic_prog_table> prog_table = write_and_dlopen(buf, prog_handle);
+    if (prog_table == nullptr) {
+        success = false;
+    }
+
+    if (success) {
+        vts->m_dyn_prog_mtx.wrlock();
+        if (vts->m_dyn_prog_map.find(prog_handle) == vts->m_dyn_prog_map.end()) {
+            vts->m_dyn_prog_map[prog_handle] = prog_table;
+        }
+        vts->m_dyn_prog_mtx.unlock();
+
+        WDEBUG << "register node prog=" << prog_handle << " successful at " << vt_id << ", sending confirm to " << rec_vt_id << std::endl;
+        msg->prepare_message(message::REGISTER_NODE_PROG_SUCCESSFUL, nullptr, prog_handle, vt_id);
+        vts->comm.send(rec_vt_id, msg->buf);
+    } else {
+        WDEBUG << "register node prog=" << prog_handle << " failed     at " << vt_id << ", sending confirm to " << rec_vt_id << std::endl;
+        msg->prepare_message(message::REGISTER_NODE_PROG_FAILED, nullptr, prog_handle, vt_id);
+        vts->comm.send(rec_vt_id, msg->buf);
     }
 
     return true;
@@ -622,16 +671,16 @@ block_signals()
 }
 
 void
-shard_registered_node_prog(const std::string &prog_handle,
-                         uint64_t shard,
-                         bool success)
+server_registered_node_prog(const std::string &prog_handle,
+                            uint64_t server,
+                            bool success)
 {
     vts->m_dyn_prog_mtx.wrlock();
     coordinator::register_node_prog_state &state = vts->m_register_prog_status[prog_handle];
-    state.shards.erase(shard);
+    state.servers.erase(server);
     bool overall_success = success && state.success;
     state.success = overall_success;
-    bool done = state.shards.empty();
+    bool done = state.servers.empty();
     uint64_t client = state.client;
     if (done) {
         vts->m_register_prog_status.erase(prog_handle);
@@ -802,44 +851,49 @@ server_loop(void *args)
                     break;
                 }
 
-                case message::REGISTER_NODE_PROG:
-                    WDEBUG << "got REGISTER_NODE_PROG msg" << std::endl;
-                    if (!register_node_prog(std::move(msg), client_sender)) {
+                case message::CLIENT_REGISTER_NODE_PROG:
+                    WDEBUG << "got CLIENT_REGISTER_NODE_PROG msg" << std::endl;
+                    if (!client_register_node_prog(std::move(msg), client_sender)) {
                         WDEBUG << "failed register node prog" << std::endl;
                         msg->prepare_message(message::REGISTER_NODE_PROG_FAILED);
                         vts->comm.send_to_client(client_sender, msg->buf);
                     }
                     break;
 
+                case message::REGISTER_NODE_PROG:
+                    WDEBUG << "got REGISTER_NODE_PROG msg" << std::endl;
+                    register_node_prog(std::move(msg));
+                    break;
+
                 case message::REGISTER_NODE_PROG_SUCCESSFUL: {
                     std::string prog_handle;
-                    uint64_t shard;
+                    uint64_t server;
                     msg->unpack_message(mtype,
                                         nullptr,
                                         prog_handle,
-                                        shard);
+                                        server);
                     WDEBUG << "got REGISTER_NODE_PROG_SUCCESS "
                            << "prog=" << prog_handle
-                           << ", shard=" << shard
+                           << ", server=" << server
                            << std::endl;
 
-                    shard_registered_node_prog(prog_handle, shard, true);
+                    server_registered_node_prog(prog_handle, server, true);
                     break;
                 }
 
                 case message::REGISTER_NODE_PROG_FAILED: {
                     std::string prog_handle;
-                    uint64_t shard;
+                    uint64_t server;
                     msg->unpack_message(mtype,
                                         nullptr,
                                         prog_handle,
-                                        shard);
+                                        server);
                     WDEBUG << "got REGISTER_NODE_PROG_FAILED "
                            << "prog=" << prog_handle
-                           << ", shard=" << shard
+                           << ", server=" << server
                            << std::endl;
 
-                    shard_registered_node_prog(prog_handle, shard, false);
+                    server_registered_node_prog(prog_handle, server, false);
                     break;
                 }
 

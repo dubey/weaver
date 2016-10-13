@@ -33,6 +33,7 @@ namespace message
         CLIENT_TX_ABORT,
         CLIENT_NODE_PROG_REQ,
         CLIENT_NODE_PROG_REPLY,
+        CLIENT_REGISTER_NODE_PROG,
         START_MIGR,
         ONE_STREAM_MIGR,
         EXIT_WEAVER,

@@ -572,7 +572,7 @@ client :: register_node_prog(const std::string &so_file,
 
     // send register node prog request to gatekeeper
     message::message msg;
-    msg.prepare_message(message::REGISTER_NODE_PROG, nullptr, prog_handle, buf);
+    msg.prepare_message(message::CLIENT_REGISTER_NODE_PROG, nullptr, prog_handle, buf);
     send_coord(msg.buf);
 
     busybee_returncode recv_code = recv_coord(&msg.buf);

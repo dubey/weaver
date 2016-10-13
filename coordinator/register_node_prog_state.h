@@ -17,7 +17,7 @@ namespace coordinator
     struct register_node_prog_state
     {
         uint64_t client;
-        std::unordered_set<uint64_t> shards;
+        std::unordered_set<uint64_t> servers;
         bool success;
 
         register_node_prog_state() : success(true) { }
