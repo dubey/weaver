@@ -46,6 +46,12 @@ static uint64_t vt_id;
 // tx functions
 void prepare_tx(uint64_t thread_id, std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub *hstub, order::oracle *time_oracle);
 void end_tx(uint64_t tx_id, coordinator::hyper_stub *hstub, uint64_t shard_id);
+// node prog functions
+void unpack_and_forward_node_prog(uint64_t thread_id,
+                                  std::unique_ptr<message::message>,
+                                  uint64_t client_id,
+                                  coordinator::hyper_stub *hs);
+bool node_prog_done(uint64_t thread_id, current_prog *cp);
 
 
 // assign locations to all node create ops
@@ -463,17 +469,21 @@ unpack_and_forward_node_prog(uint64_t thread_id,
     num_outstanding_progs.fetch_add(1);
     prog_mtx.unlock();
 
-//#ifdef weaver_gatekeeper_benchmark_
-//    {
-//        // benchmarking gatekeeper performance
-//        // return to client after "assigning timestamp"
-//        msg->prepare_message(message::NODE_PROG_BENCHMARK);
-//        vts->comm.send_to_client(clientID, msg->buf);
-//        return;
-//    }
-//#endif
-
     message::message msg_to_send;
+#ifdef weaver_gatekeeper_benchmark_echo_
+    if (node_prog_done(thread_id, cp)) {
+        for (auto &batch_pair: initial_batches) {
+            msg_to_send.prepare_message(message::NODE_PROG_RETURN,
+                                        prog_handle,
+                                        prog_type,
+                                        req_id,
+                                        cp_int,
+                                        batch_pair.second[0].second);
+            vts->comm.send_to_client(clientID, msg_to_send.buf);
+            break;
+        }
+    }
+#else
     for (auto &batch_pair: initial_batches) {
         msg_to_send.prepare_message(message::NODE_PROG,
                                     prog_handle,
@@ -485,6 +495,7 @@ unpack_and_forward_node_prog(uint64_t thread_id,
                                     batch_pair.second);
         vts->comm.send(batch_pair.first, msg_to_send.buf);
     }
+#endif
 
 #ifdef weaver_benchmark_
     vts->test_mtx.lock();
@@ -502,7 +513,7 @@ unpack_and_forward_node_prog(uint64_t thread_id,
 bool
 node_prog_done(uint64_t thread_id, current_prog *cp)
 {
-#define NDONE_PROGS_BATCH 100
+#define NDONE_PROGS_BATCH 10000000000ULL
     po6::threads::mutex &prog_mtx = vts->m_prog_thread_mtxs[thread_id];
     std::atomic<uint64_t> &num_outstanding_progs = vts->m_num_outstanding_progs;
     uint64_t &num_done_progs = vts->m_num_done_progs[thread_id];
@@ -512,8 +523,8 @@ node_prog_done(uint64_t thread_id, current_prog *cp)
 
     num_outstanding_progs.fetch_sub(1);
     done_progs.emplace_back(cp);
-    if (++num_done_progs == NDONE_PROGS_BATCH) {
-        num_done_progs = 100;
+    if (++num_done_progs >= NDONE_PROGS_BATCH) {
+        num_done_progs = 0;
         prog_mtx.unlock();
 
         vts->tx_prog_mtx.lock();
@@ -1161,7 +1172,7 @@ main(int argc, const char *argv[])
     std::cout << "Vector timestamper " << vt_id << std::endl;
     std::cout << "THIS IS AN ALPHA RELEASE WHICH SHOULD NOT BE USED IN PRODUCTION" << std::endl;
 
-#ifndef weaver_gatekeeper_benchmark_
+#ifndef weaver_gatekeeper_benchmark_nogossip_
     std::shared_ptr<pthread_t> clk_update_thr;
     if (NumVts > 1) {
         // periodic vector clock update to other timestampers
@@ -1178,7 +1189,7 @@ main(int argc, const char *argv[])
         pthread_join(*t, nullptr);
     }
 
-#ifndef weaver_gatekeeper_benchmark_
+#ifndef weaver_gatekeeper_benchmark_nogossip_
     pthread_join(*sm_thr, nullptr);
     if (clk_update_thr != nullptr) {
         pthread_join(*clk_update_thr, nullptr);

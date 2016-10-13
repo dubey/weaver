@@ -30,4 +30,7 @@
 // async node recovery
 //#define weaver_async_node_recovery_
 
+// benchmark flag
+#define weaver_shard_benchmark_
+
 #endif

@@ -37,6 +37,8 @@
 #include "coordinator/hyper_stub.h"
 #include "coordinator/register_node_prog_state.h"
 
+#define NREQ_ID_GEN_BATCH 10000
+
 namespace coordinator
 {
     class greater_tx_ptr
@@ -474,10 +476,10 @@ namespace coordinator
         if (reqids_queue.empty()) {
             // ran out of buffered reqids
             // generate some more
-            reqids_queue = std::deque<uint64_t>(10000);
+            reqids_queue = std::deque<uint64_t>(NREQ_ID_GEN_BATCH);
             m_reqid_gen_mtx.lock();
             uint64_t new_id;
-            for (uint64_t i = 0; i < 10000; i++) {
+            for (uint64_t i = 0; i < NREQ_ID_GEN_BATCH; i++) {
                 new_id = (++m_reqid_gen) & TOP_MASK;
                 new_id |= shifted_id;
                 reqids_queue[i] = new_id;

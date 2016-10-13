@@ -3,7 +3,7 @@
 
 # Number of vector timestampers.
 # Default: 1
-num_vts     : 1
+num_vts     : 2
 
 # Number of cache entries per node for node programs.  0 means no caching.
 # Default: 0
