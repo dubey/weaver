@@ -15,7 +15,7 @@
 #define weaver_db_shard_constants_h_
 
 #define NUM_SHARD_THREADS (sysconf(_SC_NPROCESSORS_ONLN ))
-//#define NUM_SHARD_THREADS 1
+//#define NUM_SHARD_THREADS 32
 //#define NUM_SHARD_THREADS 128
 
 #define NUM_NODE_MAPS 64
@@ -31,6 +31,6 @@
 //#define weaver_async_node_recovery_
 
 // benchmark flag
-#define weaver_shard_benchmark_
+//#define weaver_shard_benchmark_
 
 #endif
