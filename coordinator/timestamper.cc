@@ -471,18 +471,31 @@ unpack_and_forward_node_prog(uint64_t thread_id,
 
     message::message msg_to_send;
 #ifdef weaver_gatekeeper_benchmark_echo_
-    if (node_prog_done(thread_id, cp)) {
-        for (auto &batch_pair: initial_batches) {
-            msg_to_send.prepare_message(message::NODE_PROG_RETURN,
-                                        prog_handle,
-                                        prog_type,
-                                        req_id,
-                                        cp_int,
-                                        batch_pair.second[0].second);
-            vts->comm.send_to_client(clientID, msg_to_send.buf);
-            break;
-        }
+    // old echo impl would send to client immediately
+    //if (node_prog_done(thread_id, cp)) {
+    //    for (auto &batch_pair: initial_batches) {
+    //        msg_to_send.prepare_message(message::NODE_PROG_RETURN,
+    //                prog_handle,
+    //                prog_type,
+    //                req_id,
+    //                cp_int,
+    //                batch_pair.second[0].second);
+    //        vts->comm.send_to_client(clientID, msg_to_send.buf);
+    //        break;
+    //    }
+    //}
+
+    // new echo impl sends message to itself
+    for (auto &batch_pair: initial_batches) {
+        msg_to_send.prepare_message(message::NODE_PROG_RETURN,
+                                    prog_handle,
+                                    prog_type,
+                                    req_id,
+                                    cp_int,
+                                    batch_pair.second[0].second);
+        break;
     }
+    vts->comm.send(vt_id, msg_to_send.buf);
 #else
     for (auto &batch_pair: initial_batches) {
         msg_to_send.prepare_message(message::NODE_PROG,
