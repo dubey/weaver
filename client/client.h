@@ -31,6 +31,8 @@
 #include "node_prog/traverse_with_props.h"
 #include "node_prog/neural_net_infer.h"
 
+#define weaver_client_benchmark_
+
 namespace cl
 {
     class weaver_client_exception : public std::exception
@@ -67,6 +69,8 @@ namespace cl
             weaver_client_returncode fail_tx(weaver_client_returncode);
             std::unordered_map<std::string, std::shared_ptr<dynamic_prog_table>> m_dyn_prog_map;
             std::unordered_map<std::string, std::string> m_built_in_progs;
+            std::unordered_map<uint64_t, std::unique_ptr<message::message>> m_done_progs;
+            uint64_t m_op_id_counter;
 
         public:
             weaver_client_returncode begin_tx();
@@ -80,15 +84,27 @@ namespace cl
             weaver_client_returncode end_tx();
             weaver_client_returncode abort_tx();
 
+#ifdef weaver_client_benchmark_
+            weaver_client_returncode loop_node_prog(uint64_t op_id);
+            weaver_client_returncode run_node_prog(const std::string &prog_type,
+                                                   std::vector<std::pair<std::string, std::shared_ptr<node_prog::Node_Parameters_Base>>> &args,
+                                                   uint64_t &op_id);
+#else
             weaver_client_returncode run_node_prog(const std::string &prog_type,
                                                    std::vector<std::pair<std::string, std::shared_ptr<node_prog::Node_Parameters_Base>>> &args,
                                                    std::shared_ptr<node_prog::Node_Parameters_Base> &return_param);
+#endif
+#ifdef weaver_client_benchmark_
+            weaver_client_returncode traverse_props_program(std::vector<std::pair<std::string, node_prog::traverse_props_params>> &initial_args,
+                                                            uint64_t &op_id);
+#else
             weaver_client_returncode traverse_props_program(std::vector<std::pair<std::string, node_prog::traverse_props_params>> &initial_args,
                                                             node_prog::traverse_props_params&);
             weaver_client_returncode nn_infer(std::string &start_node,
                                               std::string &end_node,
                                               node_prog::nn_params &args,
                                               node_prog::nn_params &ret);
+#endif
 
             weaver_client_returncode register_node_prog(const std::string &so_file,
                                                         std::string &prog_handle);

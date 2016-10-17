@@ -24,6 +24,6 @@
 
 // gatekeeper benchmarking
 #define weaver_gatekeeper_benchmark_nogossip_
-#define weaver_gatekeeper_benchmark_echo_
+//#define weaver_gatekeeper_benchmark_echo_
 
 #endif

@@ -366,10 +366,12 @@ unpack_and_forward_node_prog(uint64_t thread_id,
         return;
     }
 
+    uint64_t client_prog_id;
     std::vector<std::pair<node_handle_t, std::shared_ptr<Node_Parameters_Base>>> initial_args;
     msg->unpack_message(message::CLIENT_NODE_PROG_REQ,
                         prog_handle,
                         prog_type,
+                        client_prog_id,
                         initial_args);
     
     // map from locations to a list of start_node_params to send to that shard
@@ -492,6 +494,7 @@ unpack_and_forward_node_prog(uint64_t thread_id,
                                     prog_type,
                                     req_id,
                                     cp_int,
+                                    client_prog_id,
                                     batch_pair.second[0].second);
         break;
     }
@@ -505,6 +508,7 @@ unpack_and_forward_node_prog(uint64_t thread_id,
                                     req_timestamp,
                                     req_id,
                                     cp_int,
+                                    client_prog_id,
                                     batch_pair.second);
         vts->comm.send(batch_pair.first, msg_to_send.buf);
     }

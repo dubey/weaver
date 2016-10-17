@@ -460,6 +460,7 @@ cdef extern from 'client/client.h' namespace 'cl':
         weaver_client_returncode add_alias(const string &alias, const string &node)
         weaver_client_returncode end_tx() nogil
         weaver_client_returncode abort_tx()
+        weaver_client_returncode loop_node_prog(uint64_t op_id) nogil
         #weaver_client_returncode run_reach_program(vector[pair[string, reach_params]] &initial_args, reach_params&) nogil
         #weaver_client_returncode run_pathless_reach_program(vector[pair[string, pathless_reach_params]] &initial_args, pathless_reach_params&) nogil
         #weaver_client_returncode run_clustering_program(vector[pair[string, clustering_params]] &initial_args, clustering_params&) nogil
@@ -469,8 +470,9 @@ cdef extern from 'client/client.h' namespace 'cl':
         #weaver_client_returncode edge_count_program(vector[pair[string, edge_count_params]] &initial_args, edge_count_params&) nogil
         #weaver_client_returncode edge_get_program(vector[pair[string, edge_get_params]] &initial_args, edge_get_params&) nogil
         #weaver_client_returncode node_get_program(vector[pair[string, node_get_params]] &initial_args, node_get_params&) nogil
-        weaver_client_returncode traverse_props_program(vector[pair[string, traverse_props_params]] &initial_args, traverse_props_params&) nogil
-        weaver_client_returncode nn_infer(string &start_node, string &end_node, nn_params &args, nn_params &ret) nogil
+        #weaver_client_returncode traverse_props_program(vector[pair[string, traverse_props_params]] &initial_args, traverse_props_params&) nogil
+        weaver_client_returncode traverse_props_program(vector[pair[string, traverse_props_params]] &initial_args, uint64_t&) nogil
+        #weaver_client_returncode nn_infer(string &start_node, string &end_node, nn_params &args, nn_params &ret) nogil
         #weaver_client_returncode discover_paths_program(vector[pair[string, discover_paths_params]] &initial_args, discover_paths_params&) nogil
         #weaver_client_returncode cause_and_effect_program(vector[pair[string, cause_and_effect_params]] &initial_args, cause_and_effect_params&) nogil
         #weaver_client_returncode n_gram_path_program(vector[pair[string, n_gram_path_params]] &initial_args, n_gram_path_params&) nogil
@@ -938,6 +940,14 @@ cdef class Client:
 #    def get_node_aliases(self, node):
 #        return self.get_node(node, get_props=False, get_edges=False).aliases
 
+    def loop_prog(self, op_id):
+        cdef uint64_t c_op_id = op_id
+        with nogil:
+            code = self.thisptr.loop_node_prog(c_op_id)
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'loop node prog error')
+        return True
+
     def traverse_props(self, init_args):
         cdef vector[pair[string, traverse_props_params]] c_args
         c_args.reserve(len(init_args))
@@ -972,48 +982,51 @@ cdef class Client:
                 arg_pair.second.edge_props.push_back(props)
             c_args.push_back(arg_pair)
 
-        cdef traverse_props_params c_rp
+        #cdef traverse_props_params c_rp
+        cdef uint64_t op_id = UINT64_MAX
         with nogil:
-            code = self.thisptr.traverse_props_program(c_args, c_rp)
+            #code = self.thisptr.traverse_props_program(c_args, c_rp)
+            code = self.thisptr.traverse_props_program(c_args, op_id)
 
-        if code == WEAVER_CLIENT_BENCHMARK:
-            return TraversePropsParams()
+        #if code == WEAVER_CLIENT_BENCHMARK:
+        #    return TraversePropsParams()
 
-        if code != WEAVER_CLIENT_SUCCESS:
-            raise WeaverError(code, 'node prog error')
+        #if code != WEAVER_CLIENT_SUCCESS:
+        #    raise WeaverError(code, 'node prog error')
 
-        response = TraversePropsParams()
-        for n in c_rp.return_nodes:
-            response.return_nodes.append(n)
-        for e in c_rp.return_edges:
-            response.return_edges.append(e)
-        return response
+        #response = TraversePropsParams()
+        #for n in c_rp.return_nodes:
+        #    response.return_nodes.append(n)
+        #for e in c_rp.return_edges:
+        #    response.return_edges.append(e)
+        #return response
+        return op_id
 
-    def nn_infer(self, start_node, end_node, args):
-        cdef nn_params c_args
-        c_args.input.reserve(len(args.input))
-        for x in args.input:
-            c_args.input.push_back(x)
-        c_args.act_func = args.act_func
-        c_args.layer_type = args.layer_type
-        c_args.layer_op = args.layer_op
+    #def nn_infer(self, start_node, end_node, args):
+    #    cdef nn_params c_args
+    #    c_args.input.reserve(len(args.input))
+    #    for x in args.input:
+    #        c_args.input.push_back(x)
+    #    c_args.act_func = args.act_func
+    #    c_args.layer_type = args.layer_type
+    #    c_args.layer_op = args.layer_op
 
-        cdef string c_start_node
-        cdef string c_end_node
-        c_start_node = start_node
-        c_end_node   = end_node
+    #    cdef string c_start_node
+    #    cdef string c_end_node
+    #    c_start_node = start_node
+    #    c_end_node   = end_node
 
-        cdef nn_params c_ret
-        with nogil:
-            code = self.thisptr.nn_infer(c_start_node, c_end_node, c_args, c_ret)
+    #    cdef nn_params c_ret
+    #    with nogil:
+    #        code = self.thisptr.nn_infer(c_start_node, c_end_node, c_args, c_ret)
 
-        if code != WEAVER_CLIENT_SUCCESS:
-            raise WeaverError(code, 'node prog error')
+    #    if code != WEAVER_CLIENT_SUCCESS:
+    #        raise WeaverError(code, 'node prog error')
 
-        response = NNInferParams([], args.act_func, args.layer_type, args.layer_op)
-        for x in c_ret.input:
-            response.input.append(x)
-        return response
+    #    response = NNInferParams([], args.act_func, args.layer_type, args.layer_op)
+    #    for x in c_ret.input:
+    #        response.input.append(x)
+    #    return response
 
     cdef __convert_pred_to_c_pred(self, pred, prop_predicate &pred_c):
         pred_c.key = pred.key
@@ -1339,7 +1352,8 @@ cdef class Client:
                                      collect_n=collect_nodes, \
                                      collect_e=collect_edges)
         response = self.traverse_props([(self.traverse_start_node, params)])
-        return response.return_nodes + response.return_edges
+        #return response.return_nodes + response.return_edges
+        return response
 
     def collect(self):
         return self.execute(collect_nodes=True, collect_edges=True)

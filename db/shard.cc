@@ -1553,6 +1553,7 @@ propagate_node_progs(db::node_prog_running_state &np,
                                 *np.req_vclock,
                                 np.req_id,
                                 np.vt_prog_ptr,
+                                np.client_prog_id,
                                 std::move(progs));
         S->comm.send(prop_shard, out_msg.buf);
     }
@@ -1881,6 +1882,7 @@ inline void node_prog_loop(uint64_t tid,
                                    *np.req_vclock,
                                    np.req_id,
                                    np.vt_prog_ptr,
+                                   np.client_prog_id,
                                    buf_node_params);
                 S->migration_mutex.lock();
                 if (S->deferred_reads.find(node_handle) == S->deferred_reads.end()) {
@@ -1904,6 +1906,7 @@ inline void node_prog_loop(uint64_t tid,
                                *np.req_vclock,
                                np.req_id,
                                np.vt_prog_ptr,
+                               np.client_prog_id,
                                fwd_node_params);
             uint64_t new_loc = node->migration->new_loc;
             S->release_node(node);
@@ -1966,7 +1969,7 @@ inline void node_prog_loop(uint64_t tid,
                     done_request = true;
                     // signal to send back to vector timestamper that issued request
                     std::unique_ptr<message::message> m(new message::message());
-                    m->prepare_message(message::NODE_PROG_RETURN, prog_handle, np.m_type, np.req_id, np.vt_prog_ptr, res.second);
+                    m->prepare_message(message::NODE_PROG_RETURN, prog_handle, np.m_type, np.req_id, np.vt_prog_ptr, np.client_prog_id, res.second);
                     S->comm.send(np.vt_id, m->buf);
                     break; // can only send one message back
                 } else {
@@ -2052,6 +2055,7 @@ unpack_and_run_db(uint64_t tid, std::unique_ptr<message::message> msg, order::or
                             *np->req_vclock,
                             np->req_id,
                             np->vt_prog_ptr,
+                            np->client_prog_id,
                             np->start_node_params);
         assert(np->req_vclock->clock.size() == ClkSz);
     } catch (std::bad_alloc &ba) {
@@ -2773,6 +2777,7 @@ server_loop_busybee(uint64_t thread_id)
                                         *np.req_vclock,
                                         req_id,
                                         np.vt_prog_ptr,
+                                        np.client_prog_id,
                                         np.start_node_params);
                 assert(np.req_vclock->clock.size() == ClkSz);
                 rec_msg->prepare_message(message::NODE_PROG_RETURN,
@@ -2780,6 +2785,7 @@ server_loop_busybee(uint64_t thread_id)
                                          np.m_type,
                                          req_id,
                                          np.vt_prog_ptr,
+                                         np.client_prog_id,
                                          np.start_node_params[0].second);
                 S->comm.send(np.vt_id, rec_msg->buf);
 #else

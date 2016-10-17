@@ -39,6 +39,7 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
     , handle_ctr(0)
     , init(true)
     , logging(false)
+    , m_op_id_counter(0)
 {
     if (!init_config_constants(config_file)) {
         CLIENTLOG << "weaver_client: error in init_config_constants, config file=" << config_file << std::endl;
@@ -95,7 +96,7 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
     std::string prog_handle;
     weaver_client_returncode reg_code;
     INIT_PROG("/home/dubey/installs/lib/libweavertraversepropsprog.so", "traverse_props_prog", prog_handle);
-    INIT_PROG("/home/dubey/installs/lib/libweavernninferprog.so", "nn_infer_prog", prog_handle);
+    //INIT_PROG("/home/dubey/installs/lib/libweavernninferprog.so", "nn_infer_prog", prog_handle);
 }
 
 // call once per application, even with multiple clients
@@ -400,15 +401,56 @@ client :: abort_tx()
 
 #undef CHECK_ACTIVE_TX
 
+#ifdef weaver_client_benchmark_
+// keep on calling recv until we get response for node prog "op_id"
+weaver_client_returncode
+client :: loop_node_prog(uint64_t op_id)
+{
+    std::unique_ptr<message::message> msg;
+
+    auto find_iter = m_done_progs.find(op_id);
+    while (find_iter == m_done_progs.end()) {
+        msg.reset(new message::message());
+        busybee_returncode recv_code = recv_coord(&msg->buf);
+
+        assert(recv_code == BUSYBEE_SUCCESS);
+
+        assert(msg->unpack_message_type() == message::NODE_PROG_RETURN);
+        std::string rec_prog_type;
+        uint64_t vt_req_id, vt_prog_ptr, prog_op_id;
+        msg->unpack_partial_message(message::NODE_PROG_RETURN,
+                                    rec_prog_type,
+                                    vt_req_id,
+                                    vt_prog_ptr,
+                                    prog_op_id);
+        m_done_progs[prog_op_id] = std::move(msg);
+
+        find_iter = m_done_progs.find(op_id);
+    }
+
+    // XXX need to actually return value
+    // currently just dequeue message
+    m_done_progs.erase(find_iter);
+
+    return WEAVER_CLIENT_SUCCESS;
+}
+
+weaver_client_returncode
+client :: run_node_prog(const std::string &prog_type,
+                        std::vector<std::pair<std::string, std::shared_ptr<Node_Parameters_Base>>> &initial_args,
+                        uint64_t &op_id)
+#else
 weaver_client_returncode
 client :: run_node_prog(const std::string &prog_type,
                         std::vector<std::pair<std::string, std::shared_ptr<Node_Parameters_Base>>> &initial_args,
                         std::shared_ptr<Node_Parameters_Base> &return_param)
+#endif
 {
     CHECK_INIT;
 
     message::message msg;
     busybee_returncode send_code, recv_code;
+    uint64_t client_prog_id = m_op_id_counter++;
 
     auto prog_iter = m_dyn_prog_map.find(prog_type);
     if (prog_iter == m_dyn_prog_map.end()) {
@@ -420,24 +462,26 @@ client :: run_node_prog(const std::string &prog_type,
 
 #ifdef weaver_benchmark_
 
-    msg.prepare_message(message::CLIENT_NODE_PROG_REQ, prog_handle, prog_type, initial_args);
+    msg.prepare_message(message::CLIENT_NODE_PROG_REQ, prog_handle, prog_type, client_prog_id, initial_args);
     send_code = send_coord(msg.buf);
 
     if (send_code != BUSYBEE_SUCCESS) {
         return WEAVER_CLIENT_INTERNALMSGERROR;
     }
 
+#ifndef weaver_client_benchmark_
     recv_code = recv_coord(&msg.buf);
 
     if (recv_code != BUSYBEE_SUCCESS) {
         return WEAVER_CLIENT_INTERNALMSGERROR;
     }
+#endif
 
 #else
 
     bool retry;
     do {
-        msg.prepare_message(message::CLIENT_NODE_PROG_REQ, prog_handle, prog_type, initial_args);
+        msg.prepare_message(message::CLIENT_NODE_PROG_REQ, prog_handle, prog_type, client_prog_id, initial_args);
         send_code = send_coord(msg.buf);
 
         if (send_code == BUSYBEE_DISRUPTED) {
@@ -447,6 +491,9 @@ client :: run_node_prog(const std::string &prog_type,
             return WEAVER_CLIENT_INTERNALMSGERROR;
         }
 
+#ifdef weaver_client_benchmark_
+        retry = false;
+#else
         recv_code = recv_coord(&msg.buf);
 
         switch (recv_code) {
@@ -467,10 +514,15 @@ client :: run_node_prog(const std::string &prog_type,
             default:
                 return WEAVER_CLIENT_INTERNALMSGERROR;
         }
+#endif
     } while (retry);
 
 #endif
 
+#ifdef weaver_client_benchmark_
+    op_id = client_prog_id;
+    return WEAVER_CLIENT_SUCCESS;
+#else
     std::string return_prog_type;
     uint64_t ignore_req_id, ignore_vt_ptr;
     auto ret_status = msg.unpack_message_type();
@@ -488,11 +540,18 @@ client :: run_node_prog(const std::string &prog_type,
     } else {
         return WEAVER_CLIENT_NOTFOUND;
     }
+#endif
 }
 
+#ifdef weaver_client_benchmark_
+weaver_client_returncode
+client :: traverse_props_program(std::vector<std::pair<std::string, node_prog::traverse_props_params>> &initial_args,
+                                 uint64_t &op_id)
+#else
 weaver_client_returncode
 client :: traverse_props_program(std::vector<std::pair<std::string, node_prog::traverse_props_params>> &initial_args,
                                  node_prog::traverse_props_params &return_param)
+#endif
 {
     std::vector<std::pair<std::string, std::shared_ptr<Node_Parameters_Base>>> ptr_args;
     for (auto &p: initial_args) {
@@ -504,6 +563,9 @@ client :: traverse_props_program(std::vector<std::pair<std::string, node_prog::t
         ptr_args.emplace_back(std::make_pair(p.first, base_ptr));
     }
 
+#ifdef weaver_client_benchmark_
+    weaver_client_returncode retcode = run_node_prog(m_built_in_progs["traverse_props_prog"], ptr_args, op_id);
+#else
     std::shared_ptr<Node_Parameters_Base> return_base_ptr;
     weaver_client_returncode retcode = run_node_prog(m_built_in_progs["traverse_props_prog"], ptr_args, return_base_ptr);
 
@@ -511,10 +573,12 @@ client :: traverse_props_program(std::vector<std::pair<std::string, node_prog::t
         auto return_param_ptr = std::dynamic_pointer_cast<node_prog::traverse_props_params>(return_base_ptr);
         return_param = *return_param_ptr;
     }
+#endif
 
     return retcode;
 }
 
+#ifndef weaver_client_benchmark_
 weaver_client_returncode
 client :: nn_infer(std::string &start_node,
                    std::string &end_node,
@@ -536,6 +600,7 @@ client :: nn_infer(std::string &start_node,
 
     return retcode;
 }
+#endif
 
 weaver_client_returncode
 client :: register_node_prog(const std::string &so_file,

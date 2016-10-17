@@ -49,7 +49,7 @@ int main()
 
     std::vector<std::pair<std::string, traverse_props_params>> prog_args;
     prog_args.emplace_back(std::make_pair(ayush, arg_param));
-    c.traverse_props_program(prog_args, ret_param);
+    // XXX getting async node prog code to compile c.traverse_props_program(prog_args, ret_param);
 
     bool found = false;
     for (const std::string &s: ret_param.return_nodes) {
