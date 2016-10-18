@@ -1114,20 +1114,22 @@ namespace db
             }
             node_map_mutexes[map_idx].unlock();
 
-            migration_mutex.lock();
-            shard_node_count[shard_id - ShardIdIncr]--;
-            migration_mutex.unlock();
+            if (!NoDynamicPartitioning) {
+                migration_mutex.lock();
+                shard_node_count[shard_id - ShardIdIncr]--;
+                migration_mutex.unlock();
 
 #ifdef WEAVER_CLDG
-            msg_count_mutex.lock();
-            agg_msg_count.erase(node_handle);
-            msg_count_mutex.unlock();
+                msg_count_mutex.lock();
+                agg_msg_count.erase(node_handle);
+                msg_count_mutex.unlock();
 #endif
 #ifdef WEAVER_NEW_CLDG
-            msg_count_mutex.lock();
-            agg_msg_count.erase(node_handle);
-            msg_count_mutex.unlock();
+                msg_count_mutex.lock();
+                agg_msg_count.erase(node_handle);
+                msg_count_mutex.unlock();
 #endif
+            }
 
             permanent_node_delete(n);
         } else if (n->evicted) {
@@ -1166,9 +1168,11 @@ namespace db
         }
         node_map_mutexes[map_idx].unlock();
 
-        migration_mutex.lock();
-        shard_node_count[shard_id - ShardIdIncr]++;
-        migration_mutex.unlock();
+        if (!NoDynamicPartitioning) {
+            migration_mutex.lock();
+            shard_node_count[shard_id - ShardIdIncr]++;
+            migration_mutex.unlock();
+        }
 
         if (!migrate) {
             new_node->state = node::mode::STABLE;

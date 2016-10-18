@@ -2064,12 +2064,14 @@ unpack_and_run_db(uint64_t tid, std::unique_ptr<message::message> msg, order::or
         return;
     }
 
-    // update max prog id
-    S->migration_mutex.lock();
-    if (order::oracle::happens_before_no_kronos(S->max_seen_clk[np->vt_id], np->req_vclock->clock)) {
-        S->max_seen_clk[np->vt_id] = np->req_vclock->clock;
+    if (!NoDynamicPartitioning) {
+        // update max prog id
+        S->migration_mutex.lock();
+        if (order::oracle::happens_before_no_kronos(S->max_seen_clk[np->vt_id], np->req_vclock->clock)) {
+            S->max_seen_clk[np->vt_id] = np->req_vclock->clock;
+        }
+        S->migration_mutex.unlock();
     }
-    S->migration_mutex.unlock();
 
     // check if request completed
     if (S->check_done_prog(*np->req_vclock)) {
