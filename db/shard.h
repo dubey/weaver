@@ -346,7 +346,7 @@ namespace db
             uint64_t watch_set_piggybacks;
 
             // dynamically linked node programs
-            po6::threads::mutex m_dyn_prog_mtx;
+            po6::threads::rwlock m_dyn_prog_mtx;
             // key = sha256 hash of node prog library so, value = dynamically linked prog handle
             std::unordered_map<std::string, std::shared_ptr<dynamic_prog_table>> m_dyn_prog_map;
 

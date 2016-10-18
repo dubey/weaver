@@ -2036,7 +2036,7 @@ unpack_and_run_db(uint64_t tid, std::unique_ptr<message::message> msg, order::or
     msg->unpack_partial_message(message::NODE_PROG, np->m_type);
 
     np->m_handle = nullptr;
-    S->m_dyn_prog_mtx.lock();
+    S->m_dyn_prog_mtx.rdlock();
     auto prog_iter = S->m_dyn_prog_map.find(np->m_type);
     if (prog_iter != S->m_dyn_prog_map.end()) {
         np->m_handle = (void*)prog_iter->second.get();
@@ -2619,7 +2619,7 @@ register_node_prog(std::unique_ptr<message::message> msg)
     }
 
     if (success) {
-        S->m_dyn_prog_mtx.lock();
+        S->m_dyn_prog_mtx.wrlock();
         S->m_dyn_prog_map[prog_handle] = prog_table;
         S->m_dyn_prog_mtx.unlock();
 
