@@ -264,7 +264,6 @@ queue_manager :: update_last_clocks_nonlocking(vc::vclock &new_clk)
 bool
 queue_manager :: check_last_clocks_nonlocking(vc::vclock_t &clk)
 {
-    //return true;
     // no kronos call
     return order::oracle::happens_before_no_kronos(clk, last_clocks_ptr);
 }

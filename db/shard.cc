@@ -2765,31 +2765,34 @@ server_loop_busybee(uint64_t thread_id)
 
             case message::NODE_PROG: {
 #ifdef weaver_shard_benchmark_
-                db::node_prog_running_state np;
-                rec_msg->unpack_partial_message(message::NODE_PROG, np.m_type);
-                auto prog_iter = S->m_dyn_prog_map.find(np.m_type);
-                if (prog_iter != S->m_dyn_prog_map.end()) {
-                    np.m_handle = (void*)prog_iter->second.get();
-                }
-                np.req_vclock.reset(new vc::vclock());
-                rec_msg->unpack_message(message::NODE_PROG,
-                                        np.m_handle,
-                                        np.m_type,
-                                        np.vt_id,
-                                        *np.req_vclock,
-                                        req_id,
-                                        np.vt_prog_ptr,
-                                        np.client_prog_id,
-                                        np.start_node_params);
-                assert(np.req_vclock->clock.size() == ClkSz);
-                rec_msg->prepare_message(message::NODE_PROG_RETURN,
-                                         np.m_handle,
-                                         np.m_type,
-                                         req_id,
-                                         np.vt_prog_ptr,
-                                         np.client_prog_id,
-                                         np.start_node_params[0].second);
-                S->comm.send(np.vt_id, rec_msg->buf);
+                mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
+                mwrap->time_oracle = time_oracle;
+                unpack_node_program(thread_id, mwrap);
+                //db::node_prog_running_state np;
+                //rec_msg->unpack_partial_message(message::NODE_PROG, np.m_type);
+                //auto prog_iter = S->m_dyn_prog_map.find(np.m_type);
+                //if (prog_iter != S->m_dyn_prog_map.end()) {
+                //    np.m_handle = (void*)prog_iter->second.get();
+                //}
+                //np.req_vclock.reset(new vc::vclock());
+                //rec_msg->unpack_message(message::NODE_PROG,
+                //                        np.m_handle,
+                //                        np.m_type,
+                //                        np.vt_id,
+                //                        *np.req_vclock,
+                //                        req_id,
+                //                        np.vt_prog_ptr,
+                //                        np.client_prog_id,
+                //                        np.start_node_params);
+                //assert(np.req_vclock->clock.size() == ClkSz);
+                //rec_msg->prepare_message(message::NODE_PROG_RETURN,
+                //                         np.m_handle,
+                //                         np.m_type,
+                //                         req_id,
+                //                         np.vt_prog_ptr,
+                //                         np.client_prog_id,
+                //                         np.start_node_params[0].second);
+                //S->comm.send(np.vt_id, rec_msg->buf);
 #else
                 rec_msg->unpack_partial_message(message::NODE_PROG, prog_type, vt_id, vclk, req_id);
                 assert(vclk.clock.size() == ClkSz);
