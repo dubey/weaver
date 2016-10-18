@@ -322,6 +322,7 @@ namespace db
             // node programs
         private:
             po6::threads::mutex node_prog_state_mutex;
+            po6::threads::rwlock m_done_prog_mtx;
             using out_prog_map_t = std::unordered_map<uint64_t, std::pair<vc::vclock, std::vector<node_version_t>>>;
             out_prog_map_t outstanding_prog_states; // maps request_id to list of nodes that have created prog state for that req id
             std::vector<vc::vclock_t> prog_done_clk; // largest clock of cumulative completed node prog for each VT
@@ -1803,13 +1804,13 @@ namespace db
             return;
         }
 
-        node_prog_state_mutex.lock();
+        m_done_prog_mtx.wrlock();
 
         if (order::oracle::happens_before_no_kronos(prog_done_clk[vt_id], *prog_clk)) {
             prog_done_clk[vt_id] = *prog_clk;
         }
 
-        node_prog_state_mutex.unlock();
+        m_done_prog_mtx.unlock();
     }
 
     inline void
@@ -1834,6 +1835,7 @@ namespace db
         std::vector<std::pair<uint64_t, std::vector<node_version_t>>> to_delete;
 
         node_prog_state_mutex.lock();
+        m_done_prog_mtx.rdlock();
         for (const auto &p: outstanding_prog_states) {
             const vc::vclock &clk = p.second.first;
             if (order::oracle::happens_before_no_kronos(clk.clock, prog_done_clk[clk.vt_id])) {
@@ -1854,6 +1856,7 @@ namespace db
                 del_node_counts.emplace_back(p.first);
             }
         }
+        m_done_prog_mtx.unlock();
 
         for (uint64_t d: del_node_counts) {
             m_prog_node_recover_counts.erase(d);
@@ -1871,10 +1874,10 @@ namespace db
     inline bool
     shard :: check_done_prog(vc::vclock &clk)
     {
-        node_prog_state_mutex.lock();
+        m_done_prog_mtx.rdlock();
         bool done = (clk.get_epoch() < min_prog_epoch)
                  || (order::oracle::happens_before_no_kronos(clk.clock, prog_done_clk[clk.vt_id]));
-        node_prog_state_mutex.unlock();
+        m_done_prog_mtx.unlock();
         return done;
     }
 
