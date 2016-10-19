@@ -36,12 +36,14 @@ namespace db
                            vc::vclock vclk,
                            void (*f)(uint64_t, message_wrapper*),
                            message_wrapper *a,
-                           qreq_type t)
+                           qreq_type t,
+                           bool is_tx_enq=true)
                 : priority(prio)
                 , vclock(vclk)
                 , func(f)
                 , arg(a)
                 , type(t)
+                , is_tx_enqueued(is_tx_enq)
             { }
 
         public:
@@ -50,17 +52,25 @@ namespace db
             void (*func)(uint64_t, message_wrapper*);
             message_wrapper *arg;
             qreq_type type;
+            bool is_tx_enqueued;
     };
 
     // for work queues
     struct work_thread_compare 
-        : std::binary_function<queued_request*, queued_request*, bool>
     {
         bool operator()(const queued_request* const &r1, const queued_request* const &r2)
         {
             return (r1->priority) > (r2->priority);
         }
     };
+    //struct work_thread_compare 
+    //    : std::binary_function<queued_request*, queued_request*, bool>
+    //{
+    //    bool operator()(const queued_request* const &r1, const queued_request* const &r2)
+    //    {
+    //        return (r1->priority) > (r2->priority);
+    //    }
+    //};
 
 }
 

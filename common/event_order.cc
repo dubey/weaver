@@ -154,6 +154,17 @@ oracle :: equal_or_happens_before_no_kronos(const vc::vclock_t &vclk1, const vc:
     }
 }
 
+bool
+oracle :: equal_or_happens_before_no_kronos(const vc::vclock_t &vclk, const std::vector<vc::vclock_t*> &others)
+{
+    for (const vc::vclock_t* const other: others) {
+        if (!equal_or_happens_before_no_kronos(vclk, *other)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 
 // non-static members which use kronos_cl
 

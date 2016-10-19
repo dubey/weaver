@@ -1552,6 +1552,7 @@ propagate_node_progs(db::node_prog_running_state &np,
                                 np.vt_id,
                                 *np.req_vclock,
                                 np.req_id,
+                                np.is_tx_enqueued,
                                 np.vt_prog_ptr,
                                 np.client_prog_id,
                                 std::move(progs));
@@ -1881,6 +1882,7 @@ inline void node_prog_loop(uint64_t tid,
                                    np.vt_id,
                                    *np.req_vclock,
                                    np.req_id,
+                                   np.is_tx_enqueued,
                                    np.vt_prog_ptr,
                                    np.client_prog_id,
                                    buf_node_params);
@@ -1905,6 +1907,7 @@ inline void node_prog_loop(uint64_t tid,
                                np.vt_id,
                                *np.req_vclock,
                                np.req_id,
+                               np.is_tx_enqueued,
                                np.vt_prog_ptr,
                                np.client_prog_id,
                                fwd_node_params);
@@ -2054,6 +2057,7 @@ unpack_and_run_db(uint64_t tid, std::unique_ptr<message::message> msg, order::or
                             np->vt_id,
                             *np->req_vclock,
                             np->req_id,
+                            np->is_tx_enqueued,
                             np->vt_prog_ptr,
                             np->client_prog_id,
                             np->start_node_params);
@@ -2661,6 +2665,7 @@ server_loop_busybee(uint64_t thread_id)
     db::queued_request *qreq;
     db::message_wrapper *mwrap;
     std::string prog_type;
+    bool is_tx_enqueued;
     vc::vclock vclk;
     uint64_t qts;
     transaction::tx_type txtype;
@@ -2794,15 +2799,15 @@ server_loop_busybee(uint64_t thread_id)
                 //                         np.start_node_params[0].second);
                 //S->comm.send(np.vt_id, rec_msg->buf);
 #else
-                rec_msg->unpack_partial_message(message::NODE_PROG, prog_type, vt_id, vclk, req_id);
+                rec_msg->unpack_partial_message(message::NODE_PROG, prog_type, vt_id, vclk, req_id, is_tx_enqueued);
                 assert(vclk.clock.size() == ClkSz);
 
                 mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
-                if (S->qm.check_rd_request(vclk)) {
+                if (S->qm.check_rd_request(vclk, is_tx_enqueued)) {
                     mwrap->time_oracle = time_oracle;
                     unpack_node_program(thread_id, mwrap);
                 } else {
-                    qreq = new db::queued_request(vclk.get_clock(), vclk, unpack_node_program, mwrap, db::NODE_PROG);
+                    qreq = new db::queued_request(vclk.get_clock(), vclk, unpack_node_program, mwrap, db::NODE_PROG, is_tx_enqueued);
                     S->qm.enqueue_read_request(vt_id, qreq);
                 }
 #endif

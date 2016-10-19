@@ -500,6 +500,7 @@ unpack_and_forward_node_prog(uint64_t thread_id,
     }
     vts->comm.send(vt_id, msg_to_send.buf);
 #else
+    bool is_tx_enqueued = vts->is_tx_enqueued();
     for (auto &batch_pair: initial_batches) {
         msg_to_send.prepare_message(message::NODE_PROG,
                                     prog_handle,
@@ -507,6 +508,7 @@ unpack_and_forward_node_prog(uint64_t thread_id,
                                     vt_id,
                                     req_timestamp,
                                     req_id,
+                                    is_tx_enqueued,
                                     cp_int,
                                     client_prog_id,
                                     batch_pair.second);

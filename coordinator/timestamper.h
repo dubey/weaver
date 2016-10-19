@@ -128,8 +128,8 @@ namespace coordinator
                     , migr_mutex
                     , graph_load_mutex
                     , config_mutex
-                    , exit_mutex
-                    , tx_out_queue_mtx;
+                    , exit_mutex;
+            po6::threads::rwlock tx_out_queue_mtx;
             po6::threads::rwlock clk_rw_mtx;
 
             // initial graph loading
@@ -160,6 +160,7 @@ namespace coordinator
             uint64_t generate_req_id(uint64_t thread_id);
             uint64_t generate_loc();
             void enqueue_tx(std::shared_ptr<transaction::pending_tx> tx);
+            bool is_tx_enqueued();
             bool process_tx_queue(std::shared_ptr<transaction::pending_tx> &tx_ptr, std::vector<std::shared_ptr<transaction::pending_tx>> &factored_tx);
             void factor_tx(std::shared_ptr<transaction::pending_tx> tx, std::vector<std::shared_ptr<transaction::pending_tx>> &factored_tx);
             void tx_queue_loop();
@@ -512,7 +513,7 @@ namespace coordinator
         uint64_t epoch = tx->timestamp.get_epoch();
         bool done = false;
 
-        tx_out_queue_mtx.lock();
+        tx_out_queue_mtx.wrlock();
 
         if (tx_out_queue.empty()
          && epoch == out_queue_clk.first
@@ -533,6 +534,16 @@ namespace coordinator
         tx_out_queue_mtx.unlock();
     }
 
+    inline bool
+    timestamper :: is_tx_enqueued()
+    {
+        tx_out_queue_mtx.rdlock();
+        bool is_enqueued = !tx_out_queue.empty();
+        tx_out_queue_mtx.unlock();
+
+        return is_enqueued;
+    }
+
     // return list of tx components, factored per shard
     // return true if this call did pop off out queue
     inline bool
@@ -541,7 +552,7 @@ namespace coordinator
         tx_ptr = nullptr;
         bool ret = false;
 
-        tx_out_queue_mtx.lock();
+        tx_out_queue_mtx.wrlock();
 
         if (!tx_out_queue.empty()) {
             std::shared_ptr<transaction::pending_tx> top = tx_out_queue.top();

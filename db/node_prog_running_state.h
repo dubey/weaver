@@ -35,6 +35,7 @@ namespace db
         uint64_t req_id;
         uint64_t vt_prog_ptr;
         uint64_t client_prog_id; // for async node progs
+        bool is_tx_enqueued;
         std::deque<std::pair<node_handle_t, np_param_ptr_t>> start_node_params;
         //std::unique_ptr<cache_response<CacheValueType>> cache_value;
         std::unordered_map<uint64_t, std::deque<std::pair<node_handle_t, np_param_ptr_t>>> batched_node_progs;

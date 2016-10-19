@@ -11,6 +11,8 @@
  * ===============================================================
  */
 
+#include <algorithm>
+#include <functional>
 #include <unordered_map>
 
 #define weaver_debug_
@@ -19,13 +21,47 @@
 #include "common/event_order.h"
 #include "db/queue_manager.h"
 
+using db::pqueue;
 using db::queue_order;
 using db::queue_manager;
 using db::queued_request;
 
+void
+pqueue :: push(queued_request *r)
+{
+    m_q.emplace_back(r);
+    if (!std::is_sorted(m_q.begin(), m_q.end(), m_comp)) {
+        std::sort(m_q.begin(), m_q.end(), m_comp);
+    }
+}
+
+void
+pqueue :: pop()
+{
+    m_q.pop_front();
+}
+
+queued_request*
+pqueue :: top()
+{
+    return m_q.front();
+}
+
+queued_request*
+pqueue :: bottom()
+{
+    return m_q.back();
+}
+
+bool
+pqueue :: empty()
+{
+    return m_q.empty();
+}
+
 queue_manager :: queue_manager()
-    : rd_queues(NumVts, pqueue_t())
-    , wr_queues(NumVts, pqueue_t())
+    : rd_queues(NumVts, pqueue())
+    , wr_queues(NumVts, pqueue())
     , last_clocks(NumVts, vc::vclock_t(ClkSz, 0))
     , qts(NumVts, 0)
     , min_epoch(NumVts, 0)
@@ -34,6 +70,11 @@ queue_manager :: queue_manager()
     for (size_t i = 0; i < last_clocks.size(); i++) {
         last_clocks_ptr.emplace_back(&last_clocks[i]);
     }
+
+    bottom_clocks_ptr.reserve(last_clocks.size());
+    for (size_t i = 0; i < last_clocks.size(); i++) {
+        bottom_clocks_ptr.emplace_back(nullptr);
+    }
 }
 
 void
@@ -41,6 +82,7 @@ queue_manager :: enqueue_read_request(uint64_t vt_id, queued_request *t)
 {
     queue_mutex.lock();
     rd_queues[vt_id].push(t);
+    bottom_clocks_ptr[vt_id] = &rd_queues[vt_id].bottom()->vclock.clock;
     queue_mutex.unlock();
 }
 
@@ -75,8 +117,14 @@ queue_manager :: check_rd_request_nonlocking(vc::vclock &clk)
 
 // check if the read request received in thread loop can be executed without waiting
 bool
-queue_manager :: check_rd_request(vc::vclock &clk)
+queue_manager :: check_rd_request(vc::vclock &clk, bool is_tx_enqueued)
 {
+    // if single gatekeeper and no tx enqueued when this node prog was sent out
+    // then we can exec read immediately without any more checks
+    if (NumVts == 1 && !is_tx_enqueued) {
+        return true;
+    }
+
     queue_mutex.lock();
     bool check = check_rd_request_nonlocking(clk);
     queue_mutex.unlock();
@@ -94,21 +142,6 @@ queue_manager :: enqueue_write_request(uint64_t vt_id, queued_request *t)
 
     queue_mutex.unlock();
 }
-
-//// true if all queues empty
-//bool
-//queue_manager :: check_queues_empty()
-//{
-//    for (uint64_t i = 0; i < NumVts; i++) {
-//        pqueue_t &pq = wr_queues[i];
-//        if (!pq.empty()) {
-//            WDEBUG << "all queues not empty" << std::endl;
-//            return false;
-//        }
-//    }
-//
-//    return true;
-//}
 
 // check if write request received in thread loop can be executed without waiting
 // this does not call Kronos, so if vector clocks cannot be compared, the request will be pushed on write queue
@@ -268,17 +301,35 @@ queue_manager :: check_last_clocks_nonlocking(vc::vclock_t &clk)
     return order::oracle::happens_before_no_kronos(clk, last_clocks_ptr);
 }
 
+bool
+queue_manager :: check_bottom_clocks_nonlocking(vc::vclock_t &clk)
+{
+    for (auto &p: bottom_clocks_ptr) {
+        if (p == nullptr) {
+            return false;
+        }
+    }
+
+    // no kronos call
+    return order::oracle::equal_or_happens_before_no_kronos(clk, bottom_clocks_ptr);
+}
+
 queued_request*
 queue_manager :: get_rd_req()
 {
     queued_request *req;
     for (uint64_t vt_id = 0; vt_id < NumVts; vt_id++) {
-        pqueue_t &pq = rd_queues[vt_id];
+        pqueue &pq = rd_queues[vt_id];
         // execute read request after all write queues have processed write which happens after this read
         if (!pq.empty()) {
             req = pq.top();
             if (check_rd_request_nonlocking(req->vclock)) {
                 pq.pop();
+                if (pq.empty()) {
+                    bottom_clocks_ptr[vt_id] = nullptr;
+                } else {
+                    bottom_clocks_ptr[vt_id] = &pq.bottom()->vclock.clock;
+                }
                 return req;
             }
         }
@@ -306,7 +357,7 @@ queue_manager :: check_all_nops(std::vector<uint64_t> &nops_idx)
     uint64_t num_empty = 0;
 
     for (uint64_t i = 0; i < NumVts; i++) {
-        pqueue_t &pq = wr_queues[i];
+        pqueue &pq = wr_queues[i];
         if (pq.empty()) {
             num_empty++;
         } else {
@@ -333,7 +384,7 @@ queue_manager :: check_wr_queues_timestamps(uint64_t vt_id, uint64_t qt)
                 return FUTURE;
             }
         } else {
-            pqueue_t &pq = wr_queues[i];
+            pqueue &pq = wr_queues[i];
             if (pq.empty()) { // can't go on if one of the pq's is empty
                 return FUTURE;
             } else {
@@ -407,7 +458,7 @@ queue_manager :: reset(uint64_t dead_vt, uint64_t new_epoch)
     last_clocks[dead_vt] = vc::vclock_t(ClkSz, 0);
     last_clocks_ptr[dead_vt] = &last_clocks[dead_vt];
 
-    pqueue_t &dead_queue = wr_queues[dead_vt];
+    pqueue &dead_queue = wr_queues[dead_vt];
     while (!dead_queue.empty()
         && dead_queue.top()->vclock.clock[0] < min_epoch[dead_vt]) {
         dead_queue.pop();
@@ -419,5 +470,5 @@ queue_manager :: reset(uint64_t dead_vt, uint64_t new_epoch)
 void
 queue_manager :: clear_queued_reads()
 {
-    rd_queues = std::vector<pqueue_t>(NumVts, pqueue_t());
+    rd_queues = std::vector<pqueue>(NumVts, pqueue());
 }

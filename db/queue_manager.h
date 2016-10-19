@@ -17,6 +17,7 @@
 #define weaver_db_queue_manager_h_
 
 #include <queue>
+#include <deque>
 #include <po6/threads/mutex.h>
 
 #include "db/queued_request.h"
@@ -31,6 +32,20 @@ namespace db
         UNDECIDED
     };
 
+    class pqueue
+    {
+        std::deque<queued_request*> m_q;
+        work_thread_compare m_comp;
+
+        public:
+            pqueue() { }
+            void push(queued_request*);
+            void pop();
+            queued_request* top();
+            queued_request* bottom();
+            bool empty();
+    };
+
     // priority queue type definition
     // each shard server has one such priority queue for each vector timestamper
     typedef std::priority_queue<queued_request*, std::vector<queued_request*>, work_thread_compare> pqueue_t;
@@ -38,10 +53,11 @@ namespace db
     class queue_manager
     {
         private:
-            std::vector<pqueue_t> rd_queues;
-            std::vector<pqueue_t> wr_queues;
+            std::vector<pqueue> rd_queues;
+            std::vector<pqueue> wr_queues;
             std::vector<vc::vclock_t> last_clocks; // records last transaction vclock pulled of queue for each vector timestamper
             std::vector<vc::vclock_t*> last_clocks_ptr; // vector of previous vector's entry's pointers
+            std::vector<vc::vclock_t*> bottom_clocks_ptr; // vector of bottom node prog's clock pointers
             std::vector<vc::vclock_t*> wr_clocks_ptr; // vector of clock pointers to avoid allocation on every call
             vc::qtimestamp_t qts; // queue timestamps
             std::vector<uint64_t> min_epoch;
@@ -54,6 +70,7 @@ namespace db
             queued_request* get_rw_req();
             bool update_last_clocks_nonlocking(vc::vclock &new_clk);
             bool check_last_clocks_nonlocking(vc::vclock_t &clk);
+            bool check_bottom_clocks_nonlocking(vc::vclock_t &clk);
             bool check_queues_empty();
             bool check_all_nops(std::vector<uint64_t> &nops_idx);
             bool check_rd_request_nonlocking(vc::vclock&);
@@ -64,7 +81,7 @@ namespace db
         public:
             queue_manager();
             void enqueue_read_request(uint64_t vt_id, queued_request*);
-            bool check_rd_request(vc::vclock &clk);
+            bool check_rd_request(vc::vclock &clk, bool is_tx_enqueued);
             void enqueue_write_request(uint64_t vt_id, queued_request*);
             enum queue_order check_wr_request(vc::vclock &vclk, uint64_t qt);
             bool check_rd_nop(vc::vclock &vclk, uint64_t qt);
