@@ -151,6 +151,9 @@ namespace coordinator
             // exit
             bool to_exit;
 
+            // debug
+            std::atomic<uint64_t> debug_prog_count;
+
         public:
             timestamper(uint64_t serverid, std::shared_ptr<po6::net::location> loc, bool backup);
             void init(uint64_t vtid, uint64_t weaverid);
@@ -224,6 +227,8 @@ namespace coordinator
             hstub_uninit.push_back(new hyper_stub());
             time_oracles_uninit.push_back(new order::oracle());
         }
+
+        debug_prog_count.store(0);
     }
 
     // initialize msging layer

@@ -501,6 +501,11 @@ unpack_and_forward_node_prog(uint64_t thread_id,
     vts->comm.send(vt_id, msg_to_send.buf);
 #else
     bool is_tx_enqueued = vts->is_tx_enqueued();
+    //WDEBUG << "send node prog with timestamp" << std::endl;
+    //for (uint64_t c: req_timestamp.clock) {
+    //    WDEBUG << c << std::endl;
+    //}
+    WDEBUG << "prog count=" << ++vts->debug_prog_count << std::endl;
     for (auto &batch_pair: initial_batches) {
         msg_to_send.prepare_message(message::NODE_PROG,
                                     prog_handle,
@@ -1253,7 +1258,9 @@ main(int argc, const char *argv[])
         int rc = pthread_create(clk_update_thr.get(), nullptr, &clk_update_function, nullptr);
         assert(rc == 0);
     }
+#endif
 
+#ifndef weaver_gatekeeper_benchmark_nonop_
     // periodic nops to shard
     nop_function();
 #endif
@@ -1262,8 +1269,8 @@ main(int argc, const char *argv[])
         pthread_join(*t, nullptr);
     }
 
-#ifndef weaver_gatekeeper_benchmark_nogossip_
     pthread_join(*sm_thr, nullptr);
+#ifndef weaver_gatekeeper_benchmark_nogossip_
     if (clk_update_thr != nullptr) {
         pthread_join(*clk_update_thr, nullptr);
     }

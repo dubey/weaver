@@ -26,6 +26,12 @@ weaver_client_returncode_to_string(enum weaver_client_returncode code)
             return "WEAVER_CLIENT_INITERROR";
         case WEAVER_CLIENT_LOGICALERROR:
             return "WEAVER_CLIENT_LOGICALERROR";
+        case WEAVER_CLIENT_NOMEM:
+            return "WEAVER_CLIENT_NOMEM";
+        case WEAVER_CLIENT_EXCEPTION:
+            return "WEAVER_CLIENT_EXCEPTION";
+        case WEAVER_CLIENT_TIMEOUT:
+            return "WEAVER_CLIENT_TIMEOUT";
         case WEAVER_CLIENT_ABORT:
             return "WEAVER_CLIENT_ABORT";
         case WEAVER_CLIENT_ACTIVETX:
@@ -44,6 +50,8 @@ weaver_client_returncode_to_string(enum weaver_client_returncode code)
             return "WEAVER_CLIENT_DISRUPTED";
         case WEAVER_CLIENT_INTERNALMSGERROR:
             return "WEAVER_CLIENT_INTERNALMSGERROR";
+        case WEAVER_CLIENT_BENCHMARK:
+            return "WEAVER_CLIENT_BENCHMARK";
         default:
             return "unknown weaver returncode";
     }

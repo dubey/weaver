@@ -97,6 +97,8 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
     weaver_client_returncode reg_code;
     INIT_PROG("/home/dubey/installs/lib/libweavertraversepropsprog.so", "traverse_props_prog", prog_handle);
     //INIT_PROG("/home/dubey/installs/lib/libweavernninferprog.so", "nn_infer_prog", prog_handle);
+
+    std::cout << "cl sz=" << sizeof(*this) << std::endl;
 }
 
 // call once per application, even with multiple clients
@@ -412,6 +414,10 @@ client :: loop_node_prog(uint64_t op_id)
     while (find_iter == m_done_progs.end()) {
         msg.reset(new message::message());
         busybee_returncode recv_code = recv_coord(&msg->buf);
+
+        if (recv_code == BUSYBEE_TIMEOUT) {
+            return WEAVER_CLIENT_TIMEOUT;
+        }
 
         assert(recv_code == BUSYBEE_SUCCESS);
 

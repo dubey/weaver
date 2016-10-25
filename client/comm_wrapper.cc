@@ -52,7 +52,9 @@ comm_wrapper :: comm_wrapper(uint64_t bbid, const configuration &new_config)
     , wmap(new weaver_mapper(new_config))
     , bb(new busybee_st(wmap.get(), busybee_generate_id()))
     , bb_id(bbid)
-{ }
+{
+    bb->set_timeout(30000); // 30 secs
+}
 
 comm_wrapper :: ~comm_wrapper()
 { }

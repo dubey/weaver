@@ -442,6 +442,7 @@ cdef extern from 'client/weaver/weaver_returncode.h':
         WEAVER_CLIENT_LOGICALERROR
         WEAVER_CLIENT_DISRUPTED
         WEAVER_CLIENT_INTERNALMSGERROR
+        WEAVER_CLIENT_TIMEOUT
         WEAVER_CLIENT_BENCHMARK
     const char* weaver_client_returncode_to_string(weaver_client_returncode code)
 
@@ -484,6 +485,7 @@ cdef extern from 'client/client.h' namespace 'cl':
         weaver_client_returncode exit_weaver()
         weaver_client_returncode get_node_count(vector[uint64_t]&)
         bint aux_index()
+        uint64_t get_vt_id()
 
 class WeaverError(Exception):
     def __init__(self, status, message=None):
@@ -944,9 +946,12 @@ cdef class Client:
         cdef uint64_t c_op_id = op_id
         with nogil:
             code = self.thisptr.loop_node_prog(c_op_id)
-        if code != WEAVER_CLIENT_SUCCESS:
+        if code == WEAVER_CLIENT_TIMEOUT:
+            return False
+        elif code != WEAVER_CLIENT_SUCCESS:
             raise WeaverError(code, 'loop node prog error')
-        return True
+        else:
+            return True
 
     def traverse_props(self, init_args):
         cdef vector[pair[string, traverse_props_params]] c_args
@@ -1389,3 +1394,5 @@ cdef class Client:
         return count
     def aux_index(self):
         return self.thisptr.aux_index()
+    def get_vt_id(self):
+        return self.thisptr.get_vt_id()

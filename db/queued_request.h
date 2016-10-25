@@ -60,7 +60,7 @@ namespace db
     {
         bool operator()(const queued_request* const &r1, const queued_request* const &r2)
         {
-            return (r1->priority) > (r2->priority);
+            return (r1->priority) < (r2->priority);
         }
     };
     //struct work_thread_compare 

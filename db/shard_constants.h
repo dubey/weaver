@@ -23,6 +23,9 @@
 
 #define BATCH_MSG_SIZE 10 // 1 == no batching
 
+// shard node prog queues
+#define EXEC_BATCH_SIZE 20
+
 // migration
 //#define WEAVER_CLDG // defined if communication-based LDG, undef otherwise
 //#define WEAVER_NEW_CLDG // defined if communication-based LDG, undef otherwise
@@ -31,6 +34,6 @@
 //#define weaver_async_node_recovery_
 
 // benchmark flag
-#define weaver_shard_benchmark_
+//#define weaver_shard_benchmark_
 
 #endif

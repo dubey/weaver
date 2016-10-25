@@ -157,11 +157,23 @@ oracle :: equal_or_happens_before_no_kronos(const vc::vclock_t &vclk1, const vc:
 bool
 oracle :: equal_or_happens_before_no_kronos(const vc::vclock_t &vclk, const std::vector<vc::vclock_t*> &others)
 {
+    WDEBUG << "equal_or_happ_before" << std::endl;
     for (const vc::vclock_t* const other: others) {
         if (!equal_or_happens_before_no_kronos(vclk, *other)) {
+            WDEBUG << "cur clock" << std::endl;
+            for (uint64_t c: vclk) {
+                WDEBUG << c << std::endl;
+            }
+            for (uint64_t i = 0; i < others.size(); i++) {
+                WDEBUG << "clock i=" << i << std::endl;
+                for (uint64_t c: *others[i]) {
+                    WDEBUG << c << std::endl;
+                }
+            }
             return false;
         }
     }
+    WDEBUG << "true" << std::endl;
     return true;
 }
 

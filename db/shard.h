@@ -19,6 +19,7 @@
 #include <map>
 #include <vector>
 #include <unordered_map>
+#include <atomic>
 #include <sys/types.h>
 #include <po6/threads/mutex.h>
 #include <po6/net/location.h>
@@ -364,8 +365,7 @@ namespace db
             void restore_backup();
 
             // debug
-            po6::threads::mutex nodeprog_msg_mtx;
-            std::unordered_map<uint64_t, uint64_t> nodeprog_msg_counts;
+            std::vector<std::atomic<uint64_t>> debug_prog_count;
     };
 
     inline
@@ -403,11 +403,15 @@ namespace db
         , watch_set_nops(0)
         , watch_set_piggybacks(0)
         , min_prog_epoch(0)
+        , debug_prog_count(NumVts)
     {
         for (uint64_t i = 0; i < NUM_NODE_MAPS; i++) {
             nodes[i].set_deleted_key("");
             nodes_in_memory[i] = 0;
             evicted_nodes_states[i].set_deleted_key("");
+        }
+        for (uint64_t i = 0; i < NumVts; i++) {
+            debug_prog_count[0].store(0);
         }
     }
 

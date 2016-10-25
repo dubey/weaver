@@ -2068,6 +2068,7 @@ unpack_and_run_db(uint64_t tid, std::unique_ptr<message::message> msg, order::or
         return;
     }
 
+    //WDEBUG << "unpack node program vt_id=" << np->vt_id << " req_id=" << np->req_id << std::endl;
     if (!NoDynamicPartitioning) {
         // update max prog id
         S->migration_mutex.lock();
@@ -2674,6 +2675,8 @@ server_loop_busybee(uint64_t thread_id)
     enum db::queue_order tx_order;
     order::oracle *time_oracle = S->time_oracles[thread_id];
 
+    std::vector<uint64_t> debug_prog_count(NumVts, 0);
+
     double wr_nop_prob = (RdNopPeriod*1.0) / WrNopPeriod;
     if (wr_nop_prob > 1) {
         wr_nop_prob = 1;
@@ -2802,12 +2805,22 @@ server_loop_busybee(uint64_t thread_id)
                 rec_msg->unpack_partial_message(message::NODE_PROG, prog_type, vt_id, vclk, req_id, is_tx_enqueued);
                 assert(vclk.clock.size() == ClkSz);
 
+                for (uint64_t i = 0; i < debug_prog_count.size(); i++) {
+                    if (i == vt_id) {
+                        debug_prog_count[i] = ++S->debug_prog_count[i];
+                    } else {
+                        debug_prog_count[i] = S->debug_prog_count[i].load();
+                    }
+                }
+                WDEBUG << "prog gk=" << vt_id << " count0=" << debug_prog_count[0] << " count1=" << debug_prog_count[1] << std::endl;
+
                 mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
                 if (S->qm.check_rd_request(vclk, is_tx_enqueued)) {
                     mwrap->time_oracle = time_oracle;
                     unpack_node_program(thread_id, mwrap);
                 } else {
                     qreq = new db::queued_request(vclk.get_clock(), vclk, unpack_node_program, mwrap, db::NODE_PROG, is_tx_enqueued);
+                    WDEBUG << "tid=" << thread_id << " enqueuing prog vt_id=" << vt_id << " req_id=" << req_id << std::endl;
                     S->qm.enqueue_read_request(vt_id, qreq);
                 }
 #endif

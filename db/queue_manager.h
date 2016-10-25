@@ -40,10 +40,11 @@ namespace db
         public:
             pqueue() { }
             void push(queued_request*);
-            void pop();
-            queued_request* top();
-            queued_request* bottom();
+            void pop_earliest();
+            queued_request* earliest();
+            queued_request* latest();
             bool empty();
+            uint64_t size();
     };
 
     // priority queue type definition
@@ -55,6 +56,7 @@ namespace db
         private:
             std::vector<pqueue> rd_queues;
             std::vector<pqueue> wr_queues;
+            std::deque<queued_request*> m_ready_queue; // reads whose timestamps have been compared and are ready for execution
             std::vector<vc::vclock_t> last_clocks; // records last transaction vclock pulled of queue for each vector timestamper
             std::vector<vc::vclock_t*> last_clocks_ptr; // vector of previous vector's entry's pointers
             std::vector<vc::vclock_t*> bottom_clocks_ptr; // vector of bottom node prog's clock pointers
@@ -65,9 +67,11 @@ namespace db
             order::oracle time_oracle;
 
         private:
-            queued_request* get_rd_req();
+            queued_request* get_rd_req_off_queue_nonlocking();
+            void pop_off_ready_queue_nonlocking(std::vector<queued_request*>&);
+            std::vector<queued_request*> get_rd_req();
             queued_request* get_wr_req();
-            queued_request* get_rw_req();
+            std::vector<queued_request*> get_rw_req();
             bool update_last_clocks_nonlocking(vc::vclock &new_clk);
             bool check_last_clocks_nonlocking(vc::vclock_t &clk);
             bool check_bottom_clocks_nonlocking(vc::vclock_t &clk);
