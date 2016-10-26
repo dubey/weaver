@@ -18,6 +18,7 @@
 #include <busybee_constants.h>
 #include <busybee_mapper.h>
 #include <busybee_st.h>
+//#include <busybee_single.h>
 
 #include "common/configuration.h"
 
@@ -45,12 +46,12 @@ class comm_wrapper
     private:
         configuration config;
         std::unique_ptr<weaver_mapper> wmap;
-        std::unique_ptr<busybee_st> bb;
-        uint64_t bb_id;
-        uint64_t recv_from;
+        std::unique_ptr<busybee_st> m_bb;
+        //std::unique_ptr<busybee_single> m_bb;
+        uint64_t m_recv_from;
 
     public:
-        comm_wrapper(uint64_t bb_id, const configuration &config);
+        comm_wrapper(const configuration &config);
         ~comm_wrapper();
         void reconfigure(const configuration &new_config);
 #pragma GCC diagnostic push
@@ -58,7 +59,6 @@ class comm_wrapper
         busybee_returncode send(uint64_t send_to, std::auto_ptr<e::buffer> msg);
         busybee_returncode recv(std::auto_ptr<e::buffer> *msg);
 #pragma GCC diagnostic pop
-        void drop();
 };
 
 }

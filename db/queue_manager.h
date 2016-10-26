@@ -39,7 +39,7 @@ namespace db
 
         public:
             pqueue() { }
-            void push(queued_request*);
+            void push(queued_request*, uint64_t *sort_count);
             void pop_earliest();
             queued_request* earliest();
             queued_request* latest();
@@ -65,6 +65,9 @@ namespace db
             std::vector<uint64_t> min_epoch;
             po6::threads::mutex queue_mutex;
             order::oracle time_oracle;
+            uint64_t m_rd_queue_idx;
+            // debug
+            uint64_t m_sort_count;
 
         private:
             queued_request* get_rd_req_off_queue_nonlocking();

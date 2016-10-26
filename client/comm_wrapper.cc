@@ -47,13 +47,12 @@ comm_wrapper :: weaver_mapper :: lookup(uint64_t server_id, po6::net::location *
     }
 }
 
-comm_wrapper :: comm_wrapper(uint64_t bbid, const configuration &new_config)
+comm_wrapper :: comm_wrapper(const configuration &new_config)
     : config(new_config)
     , wmap(new weaver_mapper(new_config))
-    , bb(new busybee_st(wmap.get(), busybee_generate_id()))
-    , bb_id(bbid)
+    , m_bb(new busybee_st(wmap.get(), busybee_generate_id()))
 {
-    bb->set_timeout(30000); // 30 secs
+    m_bb->set_timeout(30000); // 30 secs
 }
 
 comm_wrapper :: ~comm_wrapper()
@@ -64,7 +63,7 @@ comm_wrapper :: reconfigure(const configuration &new_config)
 {
     config = new_config;
     wmap.reset(new weaver_mapper(new_config));
-    bb.reset(new busybee_st(wmap.get(), busybee_generate_id()));
+    m_bb.reset(new busybee_st(wmap.get(), busybee_generate_id()));
 }
 
 #pragma GCC diagnostic push
@@ -72,18 +71,12 @@ comm_wrapper :: reconfigure(const configuration &new_config)
 busybee_returncode
 comm_wrapper :: send(uint64_t send_to, std::auto_ptr<e::buffer> msg)
 {
-    return bb->send(send_to, msg);
+    return m_bb->send(send_to, msg);
 }
 
 busybee_returncode
 comm_wrapper :: recv(std::auto_ptr<e::buffer> *msg)
 {
-    return bb->recv(&recv_from, msg);
+    return m_bb->recv(&m_recv_from, msg);
 }
 #pragma GCC diagnostic pop
-
-void
-comm_wrapper :: drop()
-{
-    bb->drop(recv_from);
-}

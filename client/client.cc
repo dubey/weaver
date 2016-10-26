@@ -33,7 +33,7 @@ using cl::client;
 using transaction::pending_update;
 
 client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const char *config_file="/etc/weaver.yaml")
-    : m_sm(coordinator, port)
+    : m_sm(new server_manager_link(coordinator, port))
     , cur_tx_id(UINT64_MAX)
     , tx_id_ctr(0)
     , handle_ctr(0)
@@ -55,7 +55,7 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
     vtid = distribution(generator);
     CLIENTLOG << "client vt = " << vtid << std::endl;
 
-    if (!m_sm.get_unique_number(myid)) {
+    if (!m_sm->get_unique_number(myid)) {
         init = false;
         std::string except_message = "could not contact Weaver server manager";
         throw weaver_client_exception(except_message);
@@ -79,7 +79,7 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
         }
     }
 
-    comm.reset(new cl::comm_wrapper(myid, *m_sm.config()));
+    comm.reset(new cl::comm_wrapper(*m_sm->config()));
 
 #define INIT_PROG(lib, name, prog_handle) \
     reg_code = register_node_prog(lib, prog_handle); \
@@ -97,8 +97,6 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
     weaver_client_returncode reg_code;
     INIT_PROG("/home/dubey/installs/lib/libweavertraversepropsprog.so", "traverse_props_prog", prog_handle);
     //INIT_PROG("/home/dubey/installs/lib/libweavernninferprog.so", "nn_infer_prog", prog_handle);
-
-    std::cout << "cl sz=" << sizeof(*this) << std::endl;
 }
 
 // call once per application, even with multiple clients
@@ -787,7 +785,7 @@ client :: generate_handle()
 bool
 client :: maintain_sm_connection(replicant_returncode &rc)
 {
-    if (!m_sm.ensure_configuration(&rc))
+    if (!m_sm->ensure_configuration(&rc))
     {
 
         return false;
@@ -809,7 +807,7 @@ client :: reconfigure()
             } else if (rc == REPLICANT_TIMEOUT) {
                 CLIENTLOG << "operation timed out";
             } else {
-                CLIENTLOG << "coordinator failure: " << m_sm.error_message();
+                CLIENTLOG << "coordinator failure: " << m_sm->error_message();
             }
             CLIENTLOG << "retry sm connection " << try_sm << std::endl;
         }
@@ -817,6 +815,6 @@ client :: reconfigure()
         try_sm++;
     }
 
-    comm.reset(new cl::comm_wrapper(myid, *m_sm.config()));
-    comm->reconfigure(*m_sm.config());
+    comm.reset(new cl::comm_wrapper(*m_sm->config()));
+    comm->reconfigure(*m_sm->config());
 }

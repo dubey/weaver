@@ -27,7 +27,7 @@
 #include <dlfcn.h>
 #include <wordexp.h>
 
-#define weaver_debug_
+//#define weaver_debug_
 #include "common/weaver_constants.h"
 #include "common/event_order.h"
 #include "common/clock.h"

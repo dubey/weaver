@@ -28,8 +28,9 @@ using db::queue_manager;
 using db::queued_request;
 
 void
-pqueue :: push(queued_request *r)
+pqueue :: push(queued_request *r, uint64_t *sort_count)
 {
+    WDEBUG << "push prio=" << r->priority << std::endl;
     queued_request *last = nullptr;
     if (!m_q.empty()) {
         last = m_q.back();
@@ -39,7 +40,11 @@ pqueue :: push(queued_request *r)
     m_q.emplace_back(r);
 
     if (last != nullptr && r->priority < last->priority) {
-        //WDEBUG << "last->prio=" << last->priority << ", r->prio=" << r->priority << ", sorting queue of size=" << m_q.size() << std::endl;
+        WDEBUG << "last->prio=" << last->priority
+               << ", r->prio=" << r->priority
+               << ", sorting queue of size=" << m_q.size()
+               << ", sort count=" << (sort_count == nullptr? ++(*sort_count) : 0)
+               << std::endl;
         std::sort(m_q.begin(), m_q.end(), m_comp);
     }
 }
@@ -80,6 +85,8 @@ queue_manager :: queue_manager()
     , last_clocks(NumVts, vc::vclock_t(ClkSz, 0))
     , qts(NumVts, 0)
     , min_epoch(NumVts, 0)
+    , m_rd_queue_idx(0)
+    , m_sort_count(0)
 {
     last_clocks_ptr.reserve(last_clocks.size());
     for (size_t i = 0; i < last_clocks.size(); i++) {
@@ -96,7 +103,7 @@ void
 queue_manager :: enqueue_read_request(uint64_t vt_id, queued_request *t)
 {
     queue_mutex.lock();
-    rd_queues[vt_id].push(t);
+    rd_queues[vt_id].push(t, &m_sort_count);
     bottom_clocks_ptr[vt_id] = &rd_queues[vt_id].latest()->vclock.clock;
     queue_mutex.unlock();
 }
@@ -154,7 +161,7 @@ queue_manager :: enqueue_write_request(uint64_t vt_id, queued_request *t)
     queue_mutex.lock();
 
     if (t->vclock.clock[0] >= min_epoch[vt_id]) {
-        wr_queues[vt_id].push(t);
+        wr_queues[vt_id].push(t, nullptr);
     }
 
     queue_mutex.unlock();
@@ -342,16 +349,16 @@ queued_request*
 queue_manager :: get_rd_req_off_queue_nonlocking()
 {
     queued_request *req;
-    for (uint64_t vt_id = 0; vt_id < NumVts; vt_id++) {
-        pqueue &pq = rd_queues[vt_id];
+    for (uint64_t vt_id = 0; vt_id < NumVts; vt_id++, m_rd_queue_idx = (m_rd_queue_idx+1) % NumVts) {
+        pqueue &pq = rd_queues[m_rd_queue_idx];
         if (!pq.empty()) {
             req = pq.earliest();
             if (check_rd_request_nonlocking(req->vclock)) {
                 pq.pop_earliest();
                 if (pq.empty()) {
-                    bottom_clocks_ptr[vt_id] = nullptr;
+                    bottom_clocks_ptr[m_rd_queue_idx] = nullptr;
                 }
-                WDEBUG << "pop rd req off queue #" << vt_id << std::endl;
+                //WDEBUG << "pop rd req off queue #" << m_rd_queue_idx << std::endl;
                 return req;
             }
         }
@@ -386,7 +393,7 @@ queue_manager :: get_rd_req()
     }
 
     for (uint64_t i = 0; i < rd_queues.size(); i++) {
-        WDEBUG << "i=" << i << " read queue sz=" << rd_queues[i].size() << std::endl;
+        //WDEBUG << "i=" << i << " read queue sz=" << rd_queues[i].size() << std::endl;
     }
 
     pop_off_ready_queue_nonlocking(to_exec);
@@ -507,7 +514,7 @@ queue_manager :: get_rw_req()
             to_exec.emplace_back(req);
         }
     } else {
-        WDEBUG << "got #" << to_exec.size() << " node progs to exec" << std::endl;
+        //WDEBUG << "got #" << to_exec.size() << " node progs to exec" << std::endl;
     }
 
     return to_exec;

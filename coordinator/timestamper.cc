@@ -505,7 +505,7 @@ unpack_and_forward_node_prog(uint64_t thread_id,
     //for (uint64_t c: req_timestamp.clock) {
     //    WDEBUG << c << std::endl;
     //}
-    WDEBUG << "prog count=" << ++vts->debug_prog_count << std::endl;
+    //WDEBUG << "prog count=" << ++vts->debug_prog_count << std::endl;
     for (auto &batch_pair: initial_batches) {
         msg_to_send.prepare_message(message::NODE_PROG,
                                     prog_handle,
@@ -876,7 +876,7 @@ server_loop(void *args)
                 }
 
                 case message::CLIENT_REGISTER_NODE_PROG:
-                    WDEBUG << "got CLIENT_REGISTER_NODE_PROG msg" << std::endl;
+                    WDEBUG << "got CLIENT_REGISTER_NODE_PROG msg from client=" << client_sender << std::endl;
                     if (!client_register_node_prog(std::move(msg), client_sender)) {
                         WDEBUG << "failed register node prog" << std::endl;
                         msg->prepare_message(message::REGISTER_NODE_PROG_FAILED);

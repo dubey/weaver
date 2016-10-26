@@ -61,7 +61,7 @@ namespace cl
             uint64_t myid, vtid;
             std::string myid_str;
             std::unique_ptr<cl::comm_wrapper> comm;
-            server_manager_link m_sm;
+            std::unique_ptr<server_manager_link> m_sm;
             transaction::tx_list_t cur_tx;
             uint64_t cur_tx_id, tx_id_ctr, handle_ctr;
             bool init;
