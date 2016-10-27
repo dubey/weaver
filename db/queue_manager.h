@@ -16,8 +16,7 @@
 #ifndef weaver_db_queue_manager_h_
 #define weaver_db_queue_manager_h_
 
-#include <queue>
-#include <deque>
+#include <list>
 #include <po6/threads/mutex.h>
 
 #include "db/queued_request.h"
@@ -34,12 +33,12 @@ namespace db
 
     class pqueue
     {
-        std::deque<queued_request*> m_q;
+        std::list<queued_request*> m_q;
         work_thread_compare m_comp;
 
         public:
             pqueue() { }
-            void push(queued_request*, uint64_t *sort_count);
+            void push(queued_request*, uint64_t *sort_count, uint64_t *qidx);
             void pop_earliest();
             queued_request* earliest();
             queued_request* latest();
@@ -59,7 +58,8 @@ namespace db
             std::deque<queued_request*> m_ready_queue; // reads whose timestamps have been compared and are ready for execution
             std::vector<vc::vclock_t> last_clocks; // records last transaction vclock pulled of queue for each vector timestamper
             std::vector<vc::vclock_t*> last_clocks_ptr; // vector of previous vector's entry's pointers
-            std::vector<vc::vclock_t*> bottom_clocks_ptr; // vector of bottom node prog's clock pointers
+            std::vector<std::shared_ptr<vc::vclock>> m_bottom_clocks_ptr; // vector of bottom node prog's clock pointers
+            bool m_all_bottom_clocks_set;
             std::vector<vc::vclock_t*> wr_clocks_ptr; // vector of clock pointers to avoid allocation on every call
             vc::qtimestamp_t qts; // queue timestamps
             std::vector<uint64_t> min_epoch;
@@ -77,7 +77,7 @@ namespace db
             std::vector<queued_request*> get_rw_req();
             bool update_last_clocks_nonlocking(vc::vclock &new_clk);
             bool check_last_clocks_nonlocking(vc::vclock_t &clk);
-            bool check_bottom_clocks_nonlocking(vc::vclock_t &clk);
+            bool check_bottom_clocks_nonlocking(vc::vclock_t &clk, bool print);
             bool check_queues_empty();
             bool check_all_nops(std::vector<uint64_t> &nops_idx);
             bool check_rd_request_nonlocking(vc::vclock&);

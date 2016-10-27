@@ -15,7 +15,7 @@
 #include <functional>
 #include <unordered_map>
 
-#define weaver_debug_
+//#define weaver_debug_
 #include "common/weaver_constants.h"
 #include "common/config_constants.h"
 #include "common/event_order.h"
@@ -28,24 +28,31 @@ using db::queue_manager;
 using db::queued_request;
 
 void
-pqueue :: push(queued_request *r, uint64_t *sort_count)
+pqueue :: push(queued_request *r, uint64_t *sort_count, uint64_t *queue_idx)
 {
-    WDEBUG << "push prio=" << r->priority << std::endl;
-    queued_request *last = nullptr;
-    if (!m_q.empty()) {
-        last = m_q.back();
-        assert(r->priority != last->priority);
-    }
+    if (m_q.empty() || m_q.back()->priority < r->priority) {
+        m_q.emplace_back(r);
+    } else if (r->priority < m_q.front()->priority) {
+        m_q.emplace_front(r);
+    } else {
+        queued_request *last = m_q.back();
+        assert(r->priority < last->priority);
 
-    m_q.emplace_back(r);
-
-    if (last != nullptr && r->priority < last->priority) {
         WDEBUG << "last->prio=" << last->priority
                << ", r->prio=" << r->priority
                << ", sorting queue of size=" << m_q.size()
-               << ", sort count=" << (sort_count == nullptr? ++(*sort_count) : 0)
+               << ", idx=" << (queue_idx != nullptr? *queue_idx : 100)
+               << ", sort count=" << (sort_count != nullptr? ++(*sort_count) : 0)
                << std::endl;
-        std::sort(m_q.begin(), m_q.end(), m_comp);
+
+        auto iter = m_q.end();
+        do {
+            --iter;
+            last = *iter;
+        } while (r->priority < last->priority);
+
+        ++iter;
+        m_q.emplace(iter, r);
     }
 }
 
@@ -83,6 +90,7 @@ queue_manager :: queue_manager()
     : rd_queues(NumVts, pqueue())
     , wr_queues(NumVts, pqueue())
     , last_clocks(NumVts, vc::vclock_t(ClkSz, 0))
+    , m_all_bottom_clocks_set(false)
     , qts(NumVts, 0)
     , min_epoch(NumVts, 0)
     , m_rd_queue_idx(0)
@@ -93,9 +101,9 @@ queue_manager :: queue_manager()
         last_clocks_ptr.emplace_back(&last_clocks[i]);
     }
 
-    bottom_clocks_ptr.reserve(last_clocks.size());
+    m_bottom_clocks_ptr.reserve(last_clocks.size());
     for (size_t i = 0; i < last_clocks.size(); i++) {
-        bottom_clocks_ptr.emplace_back(nullptr);
+        m_bottom_clocks_ptr.emplace_back(nullptr);
     }
 }
 
@@ -103,8 +111,23 @@ void
 queue_manager :: enqueue_read_request(uint64_t vt_id, queued_request *t)
 {
     queue_mutex.lock();
-    rd_queues[vt_id].push(t, &m_sort_count);
-    bottom_clocks_ptr[vt_id] = &rd_queues[vt_id].latest()->vclock.clock;
+    rd_queues[vt_id].push(t, &m_sort_count, &vt_id);
+
+    // update bottom clock if no tx enqueued
+    if (!rd_queues[vt_id].latest()->is_tx_enqueued) {
+        m_bottom_clocks_ptr[vt_id] = rd_queues[vt_id].latest()->vclock;
+
+        if (!m_all_bottom_clocks_set) {
+            m_all_bottom_clocks_set = true;
+            for (auto p: m_bottom_clocks_ptr) {
+                if (p == nullptr) {
+                    m_all_bottom_clocks_set = false;
+                    break;
+                }
+            }
+        }
+    }
+
     queue_mutex.unlock();
 }
 
@@ -125,7 +148,7 @@ queue_manager :: check_rd_request_nonlocking(vc::vclock &clk)
         (gk_last_clk_epoch == 0 || gk_last_clk_epoch == clk.get_epoch()) &&
         (gk_last_clk_value + 1) == clk.get_clock()) {
         ok_to_exec = true;
-    } else if (check_bottom_clocks_nonlocking(clk.clock)) {
+    } else if (check_bottom_clocks_nonlocking(clk.clock, true)) {
         ok_to_exec = true;
     } else if (check_last_clocks_nonlocking(clk.clock)) {
         ok_to_exec = true;
@@ -160,8 +183,8 @@ queue_manager :: enqueue_write_request(uint64_t vt_id, queued_request *t)
 {
     queue_mutex.lock();
 
-    if (t->vclock.clock[0] >= min_epoch[vt_id]) {
-        wr_queues[vt_id].push(t, nullptr);
+    if (t->vclock->clock[0] >= min_epoch[vt_id]) {
+        wr_queues[vt_id].push(t, nullptr, nullptr);
     }
 
     queue_mutex.unlock();
@@ -202,7 +225,7 @@ queue_manager :: check_wr_request_nonlocking(vc::vclock &vclk, uint64_t qt)
                 if (i == vclk.vt_id) {
                     continue;
                 } else {
-                    wr_clocks_ptr[j++] = &wr_queues[i].earliest()->vclock.clock;
+                    wr_clocks_ptr[j++] = &wr_queues[i].earliest()->vclock->clock;
                 }
             }
             if (order::oracle::happens_before_no_kronos(vclk.clock, wr_clocks_ptr)) {
@@ -331,33 +354,38 @@ queue_manager :: check_last_clocks_nonlocking(vc::vclock_t &clk)
 }
 
 bool
-queue_manager :: check_bottom_clocks_nonlocking(vc::vclock_t &clk)
+queue_manager :: check_bottom_clocks_nonlocking(vc::vclock_t &clk, bool print)
 {
-    for (uint64_t i = 0; i < rd_queues.size(); i++) {
-        auto &pq = rd_queues[i];
-        if (pq.empty() || pq.latest()->is_tx_enqueued) {
-            //WDEBUG << "idx=" << i << ", empty=" << pq.empty() << std::endl;
-            return false;
-        }
+    if (!m_all_bottom_clocks_set) {
+        WDEBUG << "all bottom clocks NOT SET" << std::endl;
+        return false;
     }
 
     // no kronos call
-    return order::oracle::equal_or_happens_before_no_kronos(clk, bottom_clocks_ptr);
+    bool order = order::oracle::equal_or_happens_before_no_kronos(clk, m_bottom_clocks_ptr);
+
+    if (!order && print) {
+        assert(clk.size() == 3 && m_bottom_clocks_ptr.size() == 2);
+        WDEBUG << "bottom_clocks ORDER fail cur=[" << clk[1] << "," << clk[2] << "] "
+               << "bottom[0]=[" << m_bottom_clocks_ptr[0]->clock[1] << "," << m_bottom_clocks_ptr[0]->clock[2] << "] "
+               << "bottom[1]=[" << m_bottom_clocks_ptr[1]->clock[1] << "," << m_bottom_clocks_ptr[1]->clock[2] << "] "
+               << std::endl;
+    }
+
+    return order;
 }
 
 queued_request*
 queue_manager :: get_rd_req_off_queue_nonlocking()
 {
     queued_request *req;
-    for (uint64_t vt_id = 0; vt_id < NumVts; vt_id++, m_rd_queue_idx = (m_rd_queue_idx+1) % NumVts) {
-        pqueue &pq = rd_queues[m_rd_queue_idx];
+    for (uint64_t vt_id = 0; vt_id < NumVts; vt_id++) {
+        m_rd_queue_idx = (m_rd_queue_idx + 1) % NumVts;
+        pqueue &pq     = rd_queues[m_rd_queue_idx];
         if (!pq.empty()) {
             req = pq.earliest();
-            if (check_rd_request_nonlocking(req->vclock)) {
+            if (check_rd_request_nonlocking(*req->vclock)) {
                 pq.pop_earliest();
-                if (pq.empty()) {
-                    bottom_clocks_ptr[m_rd_queue_idx] = nullptr;
-                }
                 //WDEBUG << "pop rd req off queue #" << m_rd_queue_idx << std::endl;
                 return req;
             }
@@ -388,13 +416,14 @@ queue_manager :: get_rd_req()
     }
 
     queued_request *req;
-    while ((req = get_rd_req_off_queue_nonlocking()) != nullptr) {
+    while (m_ready_queue.size() < 10*EXEC_BATCH_SIZE &&
+           (req = get_rd_req_off_queue_nonlocking()) != nullptr) {
         m_ready_queue.emplace_back(req);
     }
 
-    for (uint64_t i = 0; i < rd_queues.size(); i++) {
-        //WDEBUG << "i=" << i << " read queue sz=" << rd_queues[i].size() << std::endl;
-    }
+    //for (uint64_t i = 0; i < rd_queues.size(); i++) {
+    //    WDEBUG << "i=" << i << " read queue sz=" << rd_queues[i].size() << std::endl;
+    //}
 
     pop_off_ready_queue_nonlocking(to_exec);
 
@@ -487,7 +516,7 @@ queue_manager :: get_wr_req()
             std::vector<vc::vclock> timestamps;
             timestamps.reserve(NumVts);
             for (uint64_t vt_id = 0; vt_id < NumVts; vt_id++) {
-                timestamps.emplace_back(wr_queues[vt_id].earliest()->vclock);
+                timestamps.emplace_back(*wr_queues[vt_id].earliest()->vclock);
                 assert(timestamps.back().clock.size() == ClkSz);
             }
             exec_vt_id = time_oracle.compare_vts(timestamps);
@@ -534,7 +563,7 @@ queue_manager :: reset(uint64_t dead_vt, uint64_t new_epoch)
 
     pqueue &dead_queue = wr_queues[dead_vt];
     while (!dead_queue.empty()
-        && dead_queue.earliest()->vclock.clock[0] < min_epoch[dead_vt]) {
+        && dead_queue.earliest()->vclock->clock[0] < min_epoch[dead_vt]) {
         dead_queue.pop_earliest();
     }
 

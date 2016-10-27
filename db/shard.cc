@@ -27,7 +27,7 @@
 #include <dlfcn.h>
 #include <wordexp.h>
 
-//#define weaver_debug_
+#define weaver_debug_
 #include "common/weaver_constants.h"
 #include "common/event_order.h"
 #include "common/clock.h"
@@ -2776,31 +2776,6 @@ server_loop_busybee(uint64_t thread_id)
                 mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
                 mwrap->time_oracle = time_oracle;
                 unpack_node_program(thread_id, mwrap);
-                //db::node_prog_running_state np;
-                //rec_msg->unpack_partial_message(message::NODE_PROG, np.m_type);
-                //auto prog_iter = S->m_dyn_prog_map.find(np.m_type);
-                //if (prog_iter != S->m_dyn_prog_map.end()) {
-                //    np.m_handle = (void*)prog_iter->second.get();
-                //}
-                //np.req_vclock.reset(new vc::vclock());
-                //rec_msg->unpack_message(message::NODE_PROG,
-                //                        np.m_handle,
-                //                        np.m_type,
-                //                        np.vt_id,
-                //                        *np.req_vclock,
-                //                        req_id,
-                //                        np.vt_prog_ptr,
-                //                        np.client_prog_id,
-                //                        np.start_node_params);
-                //assert(np.req_vclock->clock.size() == ClkSz);
-                //rec_msg->prepare_message(message::NODE_PROG_RETURN,
-                //                         np.m_handle,
-                //                         np.m_type,
-                //                         req_id,
-                //                         np.vt_prog_ptr,
-                //                         np.client_prog_id,
-                //                         np.start_node_params[0].second);
-                //S->comm.send(np.vt_id, rec_msg->buf);
 #else
                 rec_msg->unpack_partial_message(message::NODE_PROG, prog_type, vt_id, vclk, req_id, is_tx_enqueued);
                 assert(vclk.clock.size() == ClkSz);
@@ -2812,7 +2787,7 @@ server_loop_busybee(uint64_t thread_id)
                         debug_prog_count[i] = S->debug_prog_count[i].load();
                     }
                 }
-                WDEBUG << "prog gk=" << vt_id << " count0=" << debug_prog_count[0] << " count1=" << debug_prog_count[1] << std::endl;
+                //WDEBUG << "prog gk=" << vt_id << " count0=" << debug_prog_count[0] << " count1=" << debug_prog_count[1] << std::endl;
 
                 mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
                 if (S->qm.check_rd_request(vclk, is_tx_enqueued)) {
@@ -2820,7 +2795,7 @@ server_loop_busybee(uint64_t thread_id)
                     unpack_node_program(thread_id, mwrap);
                 } else {
                     qreq = new db::queued_request(vclk.get_clock(), vclk, unpack_node_program, mwrap, db::NODE_PROG, is_tx_enqueued);
-                    WDEBUG << "tid=" << thread_id << " enqueuing prog vt_id=" << vt_id << " req_id=" << req_id << std::endl;
+                    //WDEBUG << "tid=" << thread_id << " enqueuing prog vt_id=" << vt_id << " req_id=" << req_id << std::endl;
                     S->qm.enqueue_read_request(vt_id, qreq);
                 }
 #endif
@@ -3368,6 +3343,9 @@ main(int argc, const char *argv[])
 
     std::cout << "Weaver: shard instance " << S->shard_id << std::endl;
     std::cout << "THIS IS AN ALPHA RELEASE WHICH SHOULD NOT BE USED IN PRODUCTION" << std::endl;
+#ifdef weaver_shard_benchmark_
+    std::cout << "CAUTION: benchmark flag set" << std::endl;
+#endif
 
     for (std::shared_ptr<pthread_t> t: worker_threads) {
         pthread_join(*t, nullptr);

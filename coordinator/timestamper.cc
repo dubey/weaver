@@ -22,7 +22,7 @@
 #include <pthread.h>
 #include <dlfcn.h>
 
-#define weaver_debug_
+//#define weaver_debug_
 #include "common/clock.h"
 #include "common/vclock.h"
 #include "common/transaction.h"
@@ -518,6 +518,9 @@ unpack_and_forward_node_prog(uint64_t thread_id,
                                     client_prog_id,
                                     batch_pair.second);
         vts->comm.send(batch_pair.first, msg_to_send.buf);
+        WDEBUG << "sent prog to shard=" << batch_pair.first
+               << ", clk=[" << req_timestamp.clock[1] << "," << req_timestamp.clock[2] << "]"
+               << std::endl;
     }
 #endif
 
@@ -1249,6 +1252,15 @@ main(int argc, const char *argv[])
 
     std::cout << "Vector timestamper " << vt_id << std::endl;
     std::cout << "THIS IS AN ALPHA RELEASE WHICH SHOULD NOT BE USED IN PRODUCTION" << std::endl;
+#ifdef weaver_gatekeeper_benchmark_nogossip_
+    std::cout << "CAUTION: benchmark_nogossip set" << std::endl;
+#endif
+#ifdef weaver_gatekeeper_benchmark_nonop_
+    std::cout << "CAUTION: benchmark_nonop set" << std::endl;
+#endif
+#ifdef weaver_gatekeeper_benchmark_echo_
+    std::cout << "CAUTION: benchmark_echo set" << std::endl;
+#endif
 
 #ifndef weaver_gatekeeper_benchmark_nogossip_
     std::shared_ptr<pthread_t> clk_update_thr;

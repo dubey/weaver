@@ -28,7 +28,7 @@ write_and_dlopen(std::vector<uint8_t> &buf, const std::string &prog_handle)
     mkdir(dir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 
     std::string so_file_name = dir + "/" + prog_handle;
-    WDEBUG << "so file name = " << so_file_name << std::endl;
+    //WDEBUG << "so file name = " << so_file_name << std::endl;
 
     FILE *test_file = fopen(so_file_name.c_str(), "r");
     bool created;

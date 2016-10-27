@@ -33,13 +33,13 @@ namespace db
     {
         public:
             queued_request(uint64_t prio,
-                           vc::vclock vclk,
+                           vc::vclock &vclk,
                            void (*f)(uint64_t, message_wrapper*),
                            message_wrapper *a,
                            qreq_type t,
                            bool is_tx_enq=true)
                 : priority(prio)
-                , vclock(vclk)
+                , vclock(new vc::vclock(vclk))
                 , func(f)
                 , arg(a)
                 , type(t)
@@ -48,7 +48,7 @@ namespace db
 
         public:
             uint64_t priority;
-            vc::vclock vclock;
+            std::shared_ptr<vc::vclock> vclock;
             void (*func)(uint64_t, message_wrapper*);
             message_wrapper *arg;
             qreq_type type;
