@@ -81,7 +81,10 @@ namespace message
     {
         public:
             enum msg_type type;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
             std::auto_ptr<e::buffer> buf;
+#pragma GCC diagnostic pop
 
             message()
                 : type(ERROR)

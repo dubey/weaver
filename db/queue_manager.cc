@@ -94,7 +94,6 @@ queue_manager :: queue_manager()
     , qts(NumVts, 0)
     , min_epoch(NumVts, 0)
     , m_rd_queue_idx(0)
-    , m_sort_count(0)
 {
     last_clocks_ptr.reserve(last_clocks.size());
     for (size_t i = 0; i < last_clocks.size(); i++) {
@@ -111,7 +110,7 @@ void
 queue_manager :: enqueue_read_request(uint64_t vt_id, queued_request *t)
 {
     queue_mutex.lock();
-    rd_queues[vt_id].push(t, &m_sort_count, &vt_id);
+    rd_queues[vt_id].push(t, nullptr, &vt_id);
 
     // update bottom clock if no tx enqueued
     if (!rd_queues[vt_id].latest()->is_tx_enqueued) {
@@ -148,7 +147,7 @@ queue_manager :: check_rd_request_nonlocking(vc::vclock &clk)
         (gk_last_clk_epoch == 0 || gk_last_clk_epoch == clk.get_epoch()) &&
         (gk_last_clk_value + 1) == clk.get_clock()) {
         ok_to_exec = true;
-    } else if (check_bottom_clocks_nonlocking(clk.clock, true)) {
+    } else if (check_bottom_clocks_nonlocking(clk.clock, false)) {
         ok_to_exec = true;
     } else if (check_last_clocks_nonlocking(clk.clock)) {
         ok_to_exec = true;
@@ -365,11 +364,11 @@ queue_manager :: check_bottom_clocks_nonlocking(vc::vclock_t &clk, bool print)
     bool order = order::oracle::equal_or_happens_before_no_kronos(clk, m_bottom_clocks_ptr);
 
     if (!order && print) {
-        assert(clk.size() == 3 && m_bottom_clocks_ptr.size() == 2);
-        WDEBUG << "bottom_clocks ORDER fail cur=[" << clk[1] << "," << clk[2] << "] "
-               << "bottom[0]=[" << m_bottom_clocks_ptr[0]->clock[1] << "," << m_bottom_clocks_ptr[0]->clock[2] << "] "
-               << "bottom[1]=[" << m_bottom_clocks_ptr[1]->clock[1] << "," << m_bottom_clocks_ptr[1]->clock[2] << "] "
-               << std::endl;
+    //    assert(clk.size() == 3 && m_bottom_clocks_ptr.size() == 2);
+    //    WDEBUG << "bottom_clocks ORDER fail cur=[" << clk[1] << "," << clk[2] << "] "
+    //           << "bottom[0]=[" << m_bottom_clocks_ptr[0]->clock[1] << "," << m_bottom_clocks_ptr[0]->clock[2] << "] "
+    //           << "bottom[1]=[" << m_bottom_clocks_ptr[1]->clock[1] << "," << m_bottom_clocks_ptr[1]->clock[2] << "] "
+    //           << std::endl;
     }
 
     return order;

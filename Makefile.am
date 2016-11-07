@@ -13,15 +13,15 @@
 
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
-CC=gcc-4.8
-CXX=g++-4.8
+CC=gcc
+CXX=g++
 CYTHON=cython
 
 AM_CFLAGS=-Wall -Wextra
-AM_CXXFLAGS=-std=c++0x -Wall -Wextra
+AM_CXXFLAGS=-std=c++11 -Wall -Wextra
 AM_CPPFLAGS=-I$(top_srcdir)/client
 CYTHON_FLAGS=--cplus
-LIBS=-lpo6 -le -lbusybee -pthread -lrt -lhyperdex-client -lreplicant -lyaml -lpopt -lglog -lpugixml -ldl
+LIBS=-lpopt -pthread -lrt -lyaml -lglog -lpugixml -ldl -lpo6 -le -lbusybee -lreplicant -lhyperdex-client
 
 if DEBUG
     AM_CFLAGS += -g3 -gdwarf-2 -O0

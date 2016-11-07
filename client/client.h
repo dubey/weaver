@@ -58,7 +58,7 @@ namespace cl
             void initialize_logging();
 
         private:
-            uint64_t myid, vtid;
+            uint64_t myid, m_vtid;
             std::string myid_str;
             std::unique_ptr<cl::comm_wrapper> comm;
             std::unique_ptr<server_manager_link> m_sm;
@@ -111,7 +111,7 @@ namespace cl
             weaver_client_returncode start_migration();
             weaver_client_returncode single_stream_migration();
             weaver_client_returncode exit_weaver();
-            uint64_t get_vt_id() { return vtid; }
+            uint64_t get_vt_id() { return m_vtid; }
             weaver_client_returncode get_node_count(std::vector<uint64_t>&);
             bool aux_index();
             void print_cur_tx();

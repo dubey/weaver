@@ -3,7 +3,7 @@
 
 # Number of vector timestampers.
 # Default: 1
-num_vts     : 2
+num_vts     : 3
 
 # Number of cache entries per node for node programs.  0 means no caching.
 # Default: 0
@@ -67,4 +67,4 @@ wr_nop_period: 1000000
 
 # number of nanoseconds between vt gossip
 # default: 10000
-clk_gossip_period: 10000
+clk_gossip_period: 1000000

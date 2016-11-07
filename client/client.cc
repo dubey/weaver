@@ -49,11 +49,11 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
         throw weaver_client_exception(except_message);
     }
 
-    std::random_device rd;
-    std::mt19937_64 generator(rd());
-    std::uniform_int_distribution<uint64_t> distribution(0, NumVts-1);
-    vtid = distribution(generator);
-    CLIENTLOG << "client vt = " << vtid << std::endl;
+    //std::random_device rd;
+    //std::mt19937_64 generator(rd());
+    //std::uniform_int_distribution<uint64_t> distribution(0, NumVts-1);
+    //m_vtid = distribution(generator);
+    //CLIENTLOG << "client vt = " << m_vtid << std::endl;
 
     if (!m_sm->get_unique_number(myid)) {
         init = false;
@@ -65,6 +65,7 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
         std::string except_message = "internal error in initialization, myid=" + std::to_string(myid);
         throw weaver_client_exception(except_message);
     }
+    m_vtid   = myid % NumVts;
     myid_str = std::to_string(myid);
 
     int try_sm = 0;
@@ -750,7 +751,7 @@ client :: aux_index()
 busybee_returncode
 client :: send_coord(std::auto_ptr<e::buffer> buf)
 {
-    return comm->send(vtid, buf);
+    return comm->send(m_vtid, buf);
 }
 
 busybee_returncode

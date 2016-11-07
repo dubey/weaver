@@ -66,8 +66,6 @@ namespace db
             po6::threads::mutex queue_mutex;
             order::oracle time_oracle;
             uint64_t m_rd_queue_idx;
-            // debug
-            uint64_t m_sort_count;
 
         private:
             queued_request* get_rd_req_off_queue_nonlocking();

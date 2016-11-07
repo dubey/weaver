@@ -23,7 +23,7 @@
 #define NUM_VT_THREADS 16
 
 // gatekeeper benchmarking
-//#define weaver_gatekeeper_benchmark_nogossip_
+#define weaver_gatekeeper_benchmark_nogossip_
 #define weaver_gatekeeper_benchmark_nonop_
 //#define weaver_gatekeeper_benchmark_echo_
 

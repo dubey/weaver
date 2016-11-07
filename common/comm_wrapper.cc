@@ -171,7 +171,9 @@ comm_wrapper :: send(uint64_t send_to, std::auto_ptr<e::buffer> msg)
 {
     busybee_returncode code = bb->send(active_server_idx[send_to], msg);
     if (code != BUSYBEE_SUCCESS) {
-        WDEBUG << "busybee send returned " << code << std::endl;
+        WDEBUG << "busybee send returned " << code
+               << ", tried sending to " << send_to
+               << std::endl;
     }
     return code;
 }
