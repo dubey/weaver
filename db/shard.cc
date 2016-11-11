@@ -904,6 +904,10 @@ load_graph(void *args)
                 chunk_count++;
             }
 
+            WDEBUG << "GRAPHML finished #nodes=" << static_xml_args.cur_shard_node_count << " "
+                   << "#edges=" << static_xml_args.cur_shard_edge_count
+                   << std::endl;
+
             file.close();
 
             S->bulk_load_persistent(hstub, data->call_hdex);

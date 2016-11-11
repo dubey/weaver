@@ -3,7 +3,7 @@
 
 # Number of vector timestampers.
 # Default: 1
-num_vts     : 3
+num_vts     : 1
 
 # Number of cache entries per node for node programs.  0 means no caching.
 # Default: 0
@@ -12,21 +12,21 @@ max_cache_entries : 0
 # HyperDex coordinator ip addrs and corresponding ports.
 # Used for starting up cluster and for connecting to HyperDex.
 hyperdex_coord:
-    - 128.84.167.101 : 7982
+    - 128.84.18.216 : 7982
 
 # HyperDex daemons ip addrs and corresponding ports.
 # Used for starting up cluster.
 hyperdex_daemons:
-    - 128.84.167.101 : 8012
+    - 128.84.18.216 : 8012
 
 # Kronos replicated state machine ip addrs and corresponding ports.
 # Used for starting up cluster and connecting to Kronos.
 kronos:
-    - 128.84.167.101 : 1992
+    - 128.84.18.216 : 1992
 
 # Weaver coordinator ip addrs and ports.
 weaver_coord:
-    - 128.84.167.101 : 2002
+    - 128.84.18.216 : 2002
 
 # if dynamic partitioning is turned off, then we do not perform HyperDex lookups during node programs
 # no_dynamic_partitioning = true assumes number of shards remains constant after initial cluster setup

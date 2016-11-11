@@ -518,9 +518,9 @@ unpack_and_forward_node_prog(uint64_t thread_id,
                                     client_prog_id,
                                     batch_pair.second);
         vts->comm.send(batch_pair.first, msg_to_send.buf);
-        WDEBUG << "sent prog to shard=" << batch_pair.first
-               << ", clk=[" << req_timestamp.clock[1] << "," << req_timestamp.clock[2] << "]"
-               << std::endl;
+        //WDEBUG << "sent prog to shard=" << batch_pair.first
+        //       << ", clk=[" << req_timestamp.clock[1] << "," << req_timestamp.clock[2] << "]"
+        //       << std::endl;
     }
 #endif
 
@@ -571,6 +571,7 @@ client_register_node_prog(std::unique_ptr<message::message> msg, uint64_t client
     std::vector<uint8_t> buf;
     std::string prog_handle;
     msg->unpack_message(message::CLIENT_REGISTER_NODE_PROG, nullptr, prog_handle, buf);
+    WDEBUG << "registering node prog from client=" << client << std::endl;
 
     if (prog_handle != weaver_util::sha256_chararr(buf, buf.size())) {
         WDEBUG << "register_node_prog error: "

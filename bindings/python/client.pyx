@@ -462,6 +462,7 @@ cdef extern from 'client/client.h' namespace 'cl':
         weaver_client_returncode end_tx() nogil
         weaver_client_returncode abort_tx()
         weaver_client_returncode loop_node_prog(uint64_t op_id) nogil
+        weaver_client_returncode loop_any_node_prog(uint64_t &op_id) nogil
         #weaver_client_returncode run_reach_program(vector[pair[string, reach_params]] &initial_args, reach_params&) nogil
         #weaver_client_returncode run_pathless_reach_program(vector[pair[string, pathless_reach_params]] &initial_args, pathless_reach_params&) nogil
         #weaver_client_returncode run_clustering_program(vector[pair[string, clustering_params]] &initial_args, clustering_params&) nogil
@@ -952,6 +953,18 @@ cdef class Client:
             raise WeaverError(code, 'loop node prog error')
         else:
             return True
+
+    def loop_any_prog(self):
+        cdef uint64_t c_op_id = UINT64_MAX
+        with nogil:
+            code = self.thisptr.loop_any_node_prog(c_op_id)
+        if code == WEAVER_CLIENT_TIMEOUT:
+            return -1
+        elif code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'loop node prog error')
+        else:
+            op_id = c_op_id
+            return op_id
 
     def traverse_props(self, init_args):
         cdef vector[pair[string, traverse_props_params]] c_args

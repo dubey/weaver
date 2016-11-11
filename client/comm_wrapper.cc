@@ -33,6 +33,11 @@ comm_wrapper :: weaver_mapper :: weaver_mapper(const configuration &config)
     }
 }
 
+comm_wrapper :: const_mapper :: const_mapper(const char* ip_addr)
+{
+    m_loc = po6::net::location(ip_addr, 5200);
+}
+
 bool
 comm_wrapper :: weaver_mapper :: lookup(uint64_t server_id, po6::net::location *loc)
 {
@@ -47,24 +52,38 @@ comm_wrapper :: weaver_mapper :: lookup(uint64_t server_id, po6::net::location *
     }
 }
 
+bool
+comm_wrapper :: const_mapper :: lookup(uint64_t, po6::net::location *loc)
+{
+    *loc = m_loc;
+    return true;
+}
+
 comm_wrapper :: comm_wrapper(const configuration &new_config)
     : config(new_config)
     , wmap(new weaver_mapper(new_config))
     , m_bb(new busybee_st(wmap.get(), busybee_generate_id()))
 {
-    m_bb->set_timeout(30000); // 30 secs
+    m_bb->set_timeout(60000); // 60 secs
+}
+
+comm_wrapper :: comm_wrapper(const char* ip_addr)
+    : cmap(new const_mapper(ip_addr))
+    , m_bb(new busybee_st(cmap.get(), busybee_generate_id()))
+{
+    m_bb->set_timeout(60000); // 60 secs
 }
 
 comm_wrapper :: ~comm_wrapper()
 { }
 
-void
-comm_wrapper :: reconfigure(const configuration &new_config)
-{
-    config = new_config;
-    wmap.reset(new weaver_mapper(new_config));
-    m_bb.reset(new busybee_st(wmap.get(), busybee_generate_id()));
-}
+//void
+//comm_wrapper :: reconfigure(const configuration &new_config)
+//{
+//    config = new_config;
+//    wmap.reset(new weaver_mapper(new_config));
+//    m_bb.reset(new busybee_st(wmap.get(), busybee_generate_id()));
+//}
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"

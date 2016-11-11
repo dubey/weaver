@@ -65,7 +65,7 @@ init_config_constants(const char *config_file_name)
         config_file = fopen(config_file_name, "r");
     }
 
-    std::vector<const char*> other_paths = {"/etc/weaver.yaml", "/usr/local/etc/weaver.yaml", "/home/dubey/installs/etc/weaver.yaml"};
+    std::vector<const char*> other_paths = {"/etc/weaver.yaml", "/usr/local/etc/weaver.yaml", "/home/ayush/local/installs/etc/weaver.yaml"};
 
     for (const auto &s: other_paths) {
         if (config_file == nullptr) {

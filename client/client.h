@@ -86,6 +86,7 @@ namespace cl
 
 #ifdef weaver_client_benchmark_
             weaver_client_returncode loop_node_prog(uint64_t op_id);
+            weaver_client_returncode loop_any_node_prog(uint64_t &op_id);
             weaver_client_returncode run_node_prog(const std::string &prog_type,
                                                    std::vector<std::pair<std::string, std::shared_ptr<node_prog::Node_Parameters_Base>>> &args,
                                                    uint64_t &op_id);

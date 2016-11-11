@@ -49,17 +49,18 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
         throw weaver_client_exception(except_message);
     }
 
-    //std::random_device rd;
-    //std::mt19937_64 generator(rd());
-    //std::uniform_int_distribution<uint64_t> distribution(0, NumVts-1);
+    std::random_device rd;
+    std::mt19937_64 generator(rd());
+    std::uniform_int_distribution<uint64_t> distribution(0, UINT64_MAX-1);
     //m_vtid = distribution(generator);
     //CLIENTLOG << "client vt = " << m_vtid << std::endl;
 
-    if (!m_sm->get_unique_number(myid)) {
-        init = false;
-        std::string except_message = "could not contact Weaver server manager";
-        throw weaver_client_exception(except_message);
-    }
+    //if (!m_sm->get_unique_number(myid)) {
+    //    init = false;
+    //    std::string except_message = "could not contact Weaver server manager";
+    //    throw weaver_client_exception(except_message);
+    //}
+    myid = distribution(generator);
     if (myid <= MaxNumServers) {
         init = false;
         std::string except_message = "internal error in initialization, myid=" + std::to_string(myid);
@@ -68,19 +69,50 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
     m_vtid   = myid % NumVts;
     myid_str = std::to_string(myid);
 
-    int try_sm = 0;
-    replicant_returncode rc;
-    while (!maintain_sm_connection(rc)) {
-        std::cerr << "weaver_client: retry server manager connection #" << try_sm++ << std::endl;
-        init = false;
-        if (try_sm == 10) {
-            init = false;
-            std::string except_message = "multiple server manager connection attempts failed";
-            throw weaver_client_exception(except_message);
-        }
-    }
+    //int try_sm = 0;
+    //replicant_returncode rc;
+    //while (!maintain_sm_connection(rc)) {
+    //    std::cerr << "weaver_client: retry server manager connection #" << try_sm++ << std::endl;
+    //    init = false;
+    //    if (try_sm == 10) {
+    //        init = false;
+    //        std::string except_message = "multiple server manager connection attempts failed";
+    //        throw weaver_client_exception(except_message);
+    //    }
+    //}
 
-    comm.reset(new cl::comm_wrapper(*m_sm->config()));
+    std::vector<std::string> gk_ips = {"128.84.18.22",
+                                       "128.84.18.23",
+                                       "128.84.18.27",
+                                       "128.84.18.28",
+                                       "128.84.18.32",
+                                       "128.84.18.33",
+                                       "128.84.18.44",
+                                       "128.84.18.45",
+                                       "128.84.18.46",
+                                       "128.84.18.137",
+                                       "128.84.18.138",
+                                       "128.84.18.139",
+                                       "128.84.18.141",
+                                       "128.84.18.142",
+                                       "128.84.18.143",
+                                       "128.84.18.144",
+                                       "128.84.18.145",
+                                       "128.84.18.34",
+                                       "128.84.18.36",
+                                       "128.84.18.37",
+                                       "128.84.18.38",
+                                       "128.84.18.40",
+                                       "128.84.18.41",
+                                       "128.84.18.42"};
+    assert(gk_ips.size() > m_vtid);
+
+    //WDEBUG << "vtid=" << m_vtid
+    //       << ", gkip=" << gk_ips[m_vtid]
+    //       << std::endl;
+
+    //comm.reset(new cl::comm_wrapper(*m_sm->config()));
+    comm.reset(new cl::comm_wrapper(gk_ips[m_vtid].c_str()));
 
 #define INIT_PROG(lib, name, prog_handle) \
     reg_code = register_node_prog(lib, prog_handle); \
@@ -96,7 +128,7 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
 
     std::string prog_handle;
     weaver_client_returncode reg_code;
-    INIT_PROG("/home/dubey/installs/lib/libweavertraversepropsprog.so", "traverse_props_prog", prog_handle);
+    INIT_PROG("/home/ayush/local/installs/lib/libweavertraversepropsprog.so", "traverse_props_prog", prog_handle);
     //INIT_PROG("/home/dubey/installs/lib/libweavernninferprog.so", "nn_infer_prog", prog_handle);
 }
 
@@ -441,6 +473,44 @@ client :: loop_node_prog(uint64_t op_id)
 }
 
 weaver_client_returncode
+client :: loop_any_node_prog(uint64_t &op_id)
+{
+    std::unique_ptr<message::message> msg;
+    msg.reset(new message::message());
+
+    busybee_returncode recv_code = recv_coord(&msg->buf);
+
+    if (recv_code == BUSYBEE_TIMEOUT) {
+        return WEAVER_CLIENT_TIMEOUT;
+    }
+    if (recv_code != BUSYBEE_SUCCESS) {
+        WDEBUG << "loop got code=" << recv_code << std::endl;
+    }
+    assert(recv_code == BUSYBEE_SUCCESS);
+
+    message::msg_type t = msg->unpack_message_type();
+    if (t != message::NODE_PROG_RETURN) {
+        WDEBUG << "loop returned message type=" << message::to_string(t) << std::endl;
+    }
+    assert(t == message::NODE_PROG_RETURN);
+
+    std::string rec_prog_type;
+    uint64_t vt_req_id, vt_prog_ptr, prog_op_id;
+    msg->unpack_partial_message(message::NODE_PROG_RETURN,
+                                rec_prog_type,
+                                vt_req_id,
+                                vt_prog_ptr,
+                                prog_op_id);
+
+    m_done_progs.erase(prog_op_id);
+    // XXX need to actually return value
+    // currently just dequeue message
+    op_id = prog_op_id;
+
+    return WEAVER_CLIENT_SUCCESS;
+}
+
+weaver_client_returncode
 client :: run_node_prog(const std::string &prog_type,
                         std::vector<std::pair<std::string, std::shared_ptr<Node_Parameters_Base>>> &initial_args,
                         uint64_t &op_id)
@@ -648,6 +718,7 @@ client :: register_node_prog(const std::string &so_file,
     busybee_returncode recv_code = recv_coord(&msg.buf);
 
     if (recv_code != BUSYBEE_SUCCESS) {
+        WDEBUG << "recv failed, returncode=" << recv_code << std::endl;
         return WEAVER_CLIENT_INTERNALMSGERROR;
     }
 
@@ -798,24 +869,25 @@ client :: maintain_sm_connection(replicant_returncode &rc)
 void
 client :: reconfigure()
 {
-    uint32_t try_sm = 0;
-    replicant_returncode rc;
+    WDEBUG << "unimplemented feature!" << std::endl;
+    //uint32_t try_sm = 0;
+    //replicant_returncode rc;
 
-    while (!maintain_sm_connection(rc)) {
-        if (logging) {
-            if (rc == REPLICANT_INTERRUPTED) {
-                CLIENTLOG << "signal received";
-            } else if (rc == REPLICANT_TIMEOUT) {
-                CLIENTLOG << "operation timed out";
-            } else {
-                CLIENTLOG << "coordinator failure: " << m_sm->error_message();
-            }
-            CLIENTLOG << "retry sm connection " << try_sm << std::endl;
-        }
+    //while (!maintain_sm_connection(rc)) {
+    //    if (logging) {
+    //        if (rc == REPLICANT_INTERRUPTED) {
+    //            CLIENTLOG << "signal received";
+    //        } else if (rc == REPLICANT_TIMEOUT) {
+    //            CLIENTLOG << "operation timed out";
+    //        } else {
+    //            CLIENTLOG << "coordinator failure: " << m_sm->error_message();
+    //        }
+    //        CLIENTLOG << "retry sm connection " << try_sm << std::endl;
+    //    }
 
-        try_sm++;
-    }
+    //    try_sm++;
+    //}
 
-    comm.reset(new cl::comm_wrapper(*m_sm->config()));
-    comm->reconfigure(*m_sm->config());
+    //comm.reset(new cl::comm_wrapper(*m_sm->config()));
+    //comm->reconfigure(*m_sm->config());
 }

@@ -28,6 +28,21 @@ namespace cl
 class comm_wrapper
 {
     public:
+        class const_mapper : public busybee_mapper
+        {
+            private:
+                po6::net::location m_loc;
+
+            public:
+                const_mapper(const char* ip_addr);
+                virtual ~const_mapper() throw () { }
+                virtual bool lookup(uint64_t server_id, po6::net::location *loc);
+
+            private:
+                const_mapper(const const_mapper&);
+                const_mapper& operator=(const const_mapper&);
+        };
+
         class weaver_mapper : public busybee_mapper
         {
             private:
@@ -46,12 +61,14 @@ class comm_wrapper
     private:
         configuration config;
         std::unique_ptr<weaver_mapper> wmap;
+        std::unique_ptr<const_mapper> cmap;
         std::unique_ptr<busybee_st> m_bb;
         //std::unique_ptr<busybee_single> m_bb;
         uint64_t m_recv_from;
 
     public:
         comm_wrapper(const configuration &config);
+        comm_wrapper(const char *ipaddr);
         ~comm_wrapper();
         void reconfigure(const configuration &new_config);
 #pragma GCC diagnostic push
