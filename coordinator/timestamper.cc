@@ -573,14 +573,14 @@ client_register_node_prog(std::unique_ptr<message::message> msg, uint64_t client
     msg->unpack_message(message::CLIENT_REGISTER_NODE_PROG, nullptr, prog_handle, buf);
     WDEBUG << "registering node prog from client=" << client << std::endl;
 
-    if (prog_handle != weaver_util::sha256_chararr(buf, buf.size())) {
-        WDEBUG << "register_node_prog error: "
-               << "sha256 does not match, "
-               << "prog_handle=" << prog_handle
-               << ", sha256=" << weaver_util::sha256_chararr(buf, buf.size())
-               << std::endl;
-        return false;
-    }
+    //if (prog_handle != weaver_util::sha256_chararr(buf, buf.size())) {
+    //    WDEBUG << "register_node_prog error: "
+    //           << "sha256 does not match, "
+    //           << "prog_handle=" << prog_handle
+    //           << ", sha256=" << weaver_util::sha256_chararr(buf, buf.size())
+    //           << std::endl;
+    //    return false;
+    //}
 
     std::shared_ptr<dynamic_prog_table> prog_table = write_and_dlopen(buf, prog_handle);
     if (prog_table == nullptr) {
@@ -647,14 +647,14 @@ register_node_prog(std::unique_ptr<message::message> msg)
 
     bool success = true;
 
-    if (prog_handle != weaver_util::sha256_chararr(buf, buf.size())) {
-        WDEBUG << "register_node_prog error: "
-               << "sha256 does not match, "
-               << "prog_handle=" << prog_handle
-               << ", sha256=" << weaver_util::sha256_chararr(buf, buf.size())
-               << std::endl;
-        success = false;
-    }
+    //if (prog_handle != weaver_util::sha256_chararr(buf, buf.size())) {
+    //    WDEBUG << "register_node_prog error: "
+    //           << "sha256 does not match, "
+    //           << "prog_handle=" << prog_handle
+    //           << ", sha256=" << weaver_util::sha256_chararr(buf, buf.size())
+    //           << std::endl;
+    //    success = false;
+    //}
 
     std::shared_ptr<dynamic_prog_table> prog_table = write_and_dlopen(buf, prog_handle);
     if (prog_table == nullptr) {

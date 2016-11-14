@@ -81,30 +81,14 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
     //    }
     //}
 
-    std::vector<std::string> gk_ips = {"128.84.18.22",
+    std::vector<std::string> gk_ips = {"128.84.18.216",
+                                       "128.84.18.22",
                                        "128.84.18.23",
                                        "128.84.18.27",
                                        "128.84.18.28",
                                        "128.84.18.32",
                                        "128.84.18.33",
-                                       "128.84.18.44",
-                                       "128.84.18.45",
-                                       "128.84.18.46",
-                                       "128.84.18.137",
-                                       "128.84.18.138",
-                                       "128.84.18.139",
-                                       "128.84.18.141",
-                                       "128.84.18.142",
-                                       "128.84.18.143",
-                                       "128.84.18.144",
-                                       "128.84.18.145",
-                                       "128.84.18.34",
-                                       "128.84.18.36",
-                                       "128.84.18.37",
-                                       "128.84.18.38",
-                                       "128.84.18.40",
-                                       "128.84.18.41",
-                                       "128.84.18.42"};
+                                       "128.84.18.44"};
     assert(gk_ips.size() > m_vtid);
 
     //WDEBUG << "vtid=" << m_vtid
@@ -128,6 +112,7 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
 
     std::string prog_handle;
     weaver_client_returncode reg_code;
+    prog_handle = "tpp";
     INIT_PROG("/home/ayush/local/installs/lib/libweavertraversepropsprog.so", "traverse_props_prog", prog_handle);
     //INIT_PROG("/home/dubey/installs/lib/libweavernninferprog.so", "nn_infer_prog", prog_handle);
 }
@@ -703,8 +688,10 @@ client :: register_node_prog(const std::string &so_file,
         return WEAVER_CLIENT_DLOPENERROR;
     }
 
-    // calc prog handle as sha256(so file)
-    prog_handle = weaver_util::sha256_chararr(buf, file_sz);
+    if (prog_handle.empty()) {
+        // calc prog handle as sha256(so file)
+        prog_handle = weaver_util::sha256_chararr(buf, file_sz);
+    }
 
     // dlsym all functions and store in a client ds
     auto prog_table = std::make_shared<dynamic_prog_table>(prog_ptr);
@@ -727,6 +714,7 @@ client :: register_node_prog(const std::string &so_file,
         return WEAVER_CLIENT_SUCCESS;
     } else {
         assert(ret_status == message::REGISTER_NODE_PROG_FAILED);
+        WDEBUG << "register node prog failed" << std::endl;
         return WEAVER_CLIENT_DLOPENERROR;
     }
 }
